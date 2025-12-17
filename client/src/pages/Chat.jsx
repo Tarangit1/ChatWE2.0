@@ -1,0 +1,247 @@
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { useSocket } from '../context/SocketContext';
+import ChatList from '../components/ChatList';
+import MessageArea from '../components/MessageArea';
+import VideoCall from '../components/VideoCall';
+import IncomingCall from '../components/IncomingCall';
+import { BsChatDots } from 'react-icons/bs';
+
+const Chat = () => {
+    const { user, logout } = useAuth();
+    const { socket, onlineUsers } = useSocket();
+    const [users, setUsers] = useState([]);
+    const [selectedUser, setSelectedUser] = useState(null);
+    const [messages, setMessages] = useState([]);
+    const [unreadCounts, setUnreadCounts] = useState({});
+    const [showDropdown, setShowDropdown] = useState(false);
+    const [inCall, setInCall] = useState(false);
+    const [callType, setCallType] = useState(null);
+    const [incomingCall, setIncomingCall] = useState(null);
+    const [callOffer, setCallOffer] = useState(null);
+
+    const API_URL = import.meta.env.VITE_API_URL;
+
+    // Fetch users
+    useEffect(() => {
+        const fetchUsers = async () => {
+            try {
+                const response = await fetch(`${API_URL}/api/messages/users`, {
+                    credentials: 'include',
+                });
+                const data = await response.json();
+                if (data.success) {
+                    setUsers(data.users);
+                }
+            } catch (error) {
+                console.error('Failed to fetch users:', error);
+            }
+        };
+
+        fetchUsers();
+    }, [API_URL]);
+
+    // Fetch unread counts
+    useEffect(() => {
+        const fetchUnread = async () => {
+            try {
+                const response = await fetch(`${API_URL}/api/messages/unread`, {
+                    credentials: 'include',
+                });
+                const data = await response.json();
+                if (data.success) {
+                    setUnreadCounts(data.unreadCounts);
+                }
+            } catch (error) {
+                console.error('Failed to fetch unread counts:', error);
+            }
+        };
+
+        fetchUnread();
+    }, [API_URL]);
+
+    // Fetch messages for selected user
+    useEffect(() => {
+        if (selectedUser) {
+            const fetchMessages = async () => {
+                try {
+                    const response = await fetch(
+                        `${API_URL}/api/messages/conversation/${selectedUser._id}`,
+                        { credentials: 'include' }
+                    );
+                    const data = await response.json();
+                    if (data.success) {
+                        setMessages(data.messages);
+                        // Clear unread count for this user
+                        setUnreadCounts((prev) => {
+                            const newCounts = { ...prev };
+                            delete newCounts[selectedUser._id];
+                            return newCounts;
+                        });
+                    }
+                } catch (error) {
+                    console.error('Failed to fetch messages:', error);
+                }
+            };
+
+            fetchMessages();
+        }
+    }, [selectedUser, API_URL]);
+
+    // Socket message listeners
+    useEffect(() => {
+        if (socket) {
+            const handleNewMessage = (message) => {
+                if (
+                    selectedUser &&
+                    (message.sender._id === selectedUser._id ||
+                        message.receiver._id === selectedUser._id)
+                ) {
+                    setMessages((prev) => [...prev, message]);
+                } else if (message.sender._id !== user.id) {
+                    // Update unread count
+                    setUnreadCounts((prev) => ({
+                        ...prev,
+                        [message.sender._id]: (prev[message.sender._id] || 0) + 1,
+                    }));
+                }
+            };
+
+            const handleMessageSent = (message) => {
+                setMessages((prev) => [...prev, message]);
+            };
+
+            const handleIncomingCall = ({ from, offer, callType }) => {
+                const caller = users.find((u) => u._id === from);
+                if (caller) {
+                    setIncomingCall(caller);
+                    setCallOffer(offer);
+                    setCallType(callType);
+                }
+            };
+
+            socket.on('message:receive', handleNewMessage);
+            socket.on('message:sent', handleMessageSent);
+            socket.on('call:incoming', handleIncomingCall);
+
+            return () => {
+                socket.off('message:receive', handleNewMessage);
+                socket.off('message:sent', handleMessageSent);
+                socket.off('call:incoming', handleIncomingCall);
+            };
+        }
+    }, [socket, selectedUser, user, users]);
+
+    const handleSelectUser = (chatUser) => {
+        setSelectedUser(chatUser);
+    };
+
+    const handleStartCall = (type) => {
+        setCallType(type);
+        setInCall(true);
+    };
+
+    const handleEndCall = () => {
+        setInCall(false);
+        setCallType(null);
+    };
+
+    const handleAnswerCall = () => {
+        setSelectedUser(incomingCall);
+        setInCall(true);
+        setIncomingCall(null);
+    };
+
+    const handleRejectCall = () => {
+        setIncomingCall(null);
+        setCallOffer(null);
+        setCallType(null);
+    };
+
+    return (
+        <div className="chat-layout">
+            {/* Sidebar with Chat List */}
+            <aside className="sidebar">
+                <header className="sidebar-header">
+                    <div className="sidebar-logo">
+                        <img src="/chat-icon.svg" alt="ChatFlow" />
+                        <h1>ChatFlow</h1>
+                    </div>
+                    <div className="user-menu">
+                        <img
+                            src={user?.avatar || '/default-avatar.png'}
+                            alt={user?.name}
+                            className="user-avatar"
+                            onClick={() => setShowDropdown(!showDropdown)}
+                        />
+                        {showDropdown && (
+                            <div className="user-dropdown">
+                                <div className="user-dropdown-item">
+                                    <span>{user?.name}</span>
+                                </div>
+                                <button
+                                    className="user-dropdown-item logout"
+                                    onClick={logout}
+                                >
+                                    Logout
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </header>
+
+                <ChatList
+                    users={users}
+                    selectedUser={selectedUser}
+                    onSelectUser={handleSelectUser}
+                    unreadCounts={unreadCounts}
+                    onlineUsers={onlineUsers}
+                />
+            </aside>
+
+            {/* Main Chat Area */}
+            <main className="chat-main">
+                {selectedUser ? (
+                    <MessageArea
+                        selectedUser={selectedUser}
+                        messages={messages}
+                        currentUser={user}
+                        onStartCall={handleStartCall}
+                    />
+                ) : (
+                    <div className="empty-state">
+                        <div className="empty-state-icon">
+                            <BsChatDots />
+                        </div>
+                        <h2 className="empty-state-title">Welcome to ChatFlow</h2>
+                        <p className="empty-state-subtitle">
+                            Select a conversation to start messaging
+                        </p>
+                    </div>
+                )}
+            </main>
+
+            {/* Video Call Modal */}
+            {inCall && selectedUser && (
+                <VideoCall
+                    user={selectedUser}
+                    callType={callType}
+                    onEndCall={handleEndCall}
+                    incomingOffer={callOffer}
+                />
+            )}
+
+            {/* Incoming Call Modal */}
+            {incomingCall && !inCall && (
+                <IncomingCall
+                    caller={incomingCall}
+                    callType={callType}
+                    onAnswer={handleAnswerCall}
+                    onReject={handleRejectCall}
+                />
+            )}
+        </div>
+    );
+};
+
+export default Chat;
