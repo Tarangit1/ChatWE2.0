@@ -13,17 +13,29 @@ import {
     BsImage,
     BsPlayCircle,
     BsArrowLeft,
+    BsReply,
+    BsCheck,
+    BsCheckAll,
+    BsXLg,
+    BsCloudUpload,
 } from 'react-icons/bs';
 
+const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
+
 const MessageArea = ({ selectedUser, messages, currentUser, onStartCall, onBack }) => {
-    const { sendMessage, startTyping, stopTyping, isOnline, isTyping } = useSocket();
+    const { socket, sendMessage, startTyping, stopTyping, isOnline, isTyping } = useSocket();
     const [messageText, setMessageText] = useState('');
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [showFileUpload, setShowFileUpload] = useState(false);
     const [selectedFile, setSelectedFile] = useState(null);
+    const [replyingTo, setReplyingTo] = useState(null);
+    const [showReactionPicker, setShowReactionPicker] = useState(null);
+    const [isDragging, setIsDragging] = useState(false);
+    const [localMessages, setLocalMessages] = useState(messages);
     const messagesEndRef = useRef(null);
     const typingTimeoutRef = useRef(null);
     const inputRef = useRef(null);
+    const dropzoneRef = useRef(null);
 
     const API_URL = import.meta.env.VITE_API_URL;
 
@@ -32,12 +44,95 @@ const MessageArea = ({ selectedUser, messages, currentUser, onStartCall, onBack 
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
+    // Sync local messages with props
+    useEffect(() => {
+        setLocalMessages(messages);
+    }, [messages]);
+
     // Reset state when user changes
     useEffect(() => {
         setMessageText('');
         setShowEmojiPicker(false);
         setSelectedFile(null);
+        setReplyingTo(null);
     }, [selectedUser]);
+
+    // Socket listeners for reactions and read receipts
+    useEffect(() => {
+        if (socket) {
+            socket.on('message:reacted', handleReactionUpdate);
+            socket.on('message:read', handleReadReceipt);
+
+            return () => {
+                socket.off('message:reacted', handleReactionUpdate);
+                socket.off('message:read', handleReadReceipt);
+            };
+        }
+    }, [socket]);
+
+    // Drag and drop handlers
+    useEffect(() => {
+        const handleDragOver = (e) => {
+            e.preventDefault();
+            setIsDragging(true);
+        };
+
+        const handleDragLeave = (e) => {
+            e.preventDefault();
+            if (e.target === dropzoneRef.current) {
+                setIsDragging(false);
+            }
+        };
+
+        const handleDrop = (e) => {
+            e.preventDefault();
+            setIsDragging(false);
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                setSelectedFile(files[0]);
+            }
+        };
+
+        window.addEventListener('dragover', handleDragOver);
+        window.addEventListener('dragleave', handleDragLeave);
+        window.addEventListener('drop', handleDrop);
+
+        return () => {
+            window.removeEventListener('dragover', handleDragOver);
+            window.removeEventListener('dragleave', handleDragLeave);
+            window.removeEventListener('drop', handleDrop);
+        };
+    }, []);
+
+    const handleReactionUpdate = ({ messageId, reactions }) => {
+        setLocalMessages(prev => prev.map(msg => 
+            msg._id === messageId ? { ...msg, reactions } : msg
+        ));
+    };
+
+    const handleReadReceipt = ({ messageIds, readAt }) => {
+        setLocalMessages(prev => prev.map(msg => 
+            messageIds.includes(msg._id) ? { ...msg, isRead: true, readAt } : msg
+        ));
+    };
+
+    const handleAddReaction = (messageId, emoji) => {
+        socket?.emit('message:react', {
+            messageId,
+            emoji,
+            receiverId: selectedUser._id,
+        });
+        setShowReactionPicker(null);
+    };
+
+    const handleReply = (message) => {
+        setReplyingTo(message);
+        inputRef.current?.focus();
+    };
+
+    const cancelReply = () => {
+        setReplyingTo(null);
+    };
 
     const handleInputChange = (e) => {
         setMessageText(e.target.value);
@@ -69,22 +164,45 @@ const MessageArea = ({ selectedUser, messages, currentUser, onStartCall, onBack 
                 const data = await response.json();
                 if (data.success) {
                     const messageType = getFileType(data.file.mimeType);
-                    sendMessage(selectedUser._id, messageText, messageType, {
-                        fileUrl: data.file.url,
-                        fileName: data.file.name,
-                        fileSize: data.file.size,
-                        mimeType: data.file.mimeType,
-                    });
+                    if (replyingTo) {
+                        socket?.emit('message:reply', {
+                            receiverId: selectedUser._id,
+                            content: messageText,
+                            messageType,
+                            replyToId: replyingTo._id,
+                            fileUrl: data.file.url,
+                            fileName: data.file.name,
+                            fileSize: data.file.size,
+                            mimeType: data.file.mimeType,
+                        });
+                    } else {
+                        sendMessage(selectedUser._id, messageText, messageType, {
+                            fileUrl: data.file.url,
+                            fileName: data.file.name,
+                            fileSize: data.file.size,
+                            mimeType: data.file.mimeType,
+                        });
+                    }
                 }
             } catch (error) {
                 console.error('File upload failed:', error);
             }
             setSelectedFile(null);
         } else {
-            sendMessage(selectedUser._id, messageText, 'text');
+            if (replyingTo) {
+                socket?.emit('message:reply', {
+                    receiverId: selectedUser._id,
+                    content: messageText,
+                    messageType: 'text',
+                    replyToId: replyingTo._id,
+                });
+            } else {
+                sendMessage(selectedUser._id, messageText, 'text');
+            }
         }
 
         setMessageText('');
+        setReplyingTo(null);
         stopTyping(selectedUser._id);
     };
 
@@ -132,6 +250,13 @@ const MessageArea = ({ selectedUser, messages, currentUser, onStartCall, onBack 
 
     const renderMessage = (message) => {
         const isSent = message.sender._id === currentUser.id;
+        const reactions = message.reactions || [];
+        const groupedReactions = reactions.reduce((acc, r) => {
+            acc[r.emoji] = acc[r.emoji] || { emoji: r.emoji, count: 0, users: [] };
+            acc[r.emoji].count++;
+            acc[r.emoji].users.push(r.user);
+            return acc;
+        }, {});
 
         return (
             <div key={message._id} className={`message-group ${isSent ? 'sent' : ''}`}>
@@ -143,9 +268,44 @@ const MessageArea = ({ selectedUser, messages, currentUser, onStartCall, onBack 
                     />
                 )}
                 <div className="message-content">
+                    {/* Reply preview */}
+                    {message.replyTo && (
+                        <div className="message-reply">
+                            <span className="message-reply-sender">
+                                {message.replyTo.sender?.name || 'Unknown'}
+                            </span>
+                            <span className="message-reply-text">
+                                {message.replyTo.content || 'Media'}
+                            </span>
+                        </div>
+                    )}
+
                     {message.messageType === 'text' && (
                         <div className="message-bubble">
                             <p className="message-text">{message.content}</p>
+                            
+                            {/* Reaction picker trigger */}
+                            <button 
+                                className="reaction-picker-trigger"
+                                onClick={() => setShowReactionPicker(showReactionPicker === message._id ? null : message._id)}
+                            >
+                                😊
+                            </button>
+                            
+                            {/* Quick reactions popup */}
+                            {showReactionPicker === message._id && (
+                                <div className="quick-reactions">
+                                    {QUICK_REACTIONS.map(emoji => (
+                                        <button
+                                            key={emoji}
+                                            className="quick-reaction"
+                                            onClick={() => handleAddReaction(message._id, emoji)}
+                                        >
+                                            {emoji}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -219,7 +379,47 @@ const MessageArea = ({ selectedUser, messages, currentUser, onStartCall, onBack 
                         </div>
                     )}
 
-                    <span className="message-time">{formatTime(message.createdAt)}</span>
+                    {/* Reactions display */}
+                    {Object.keys(groupedReactions).length > 0 && (
+                        <div className="message-reactions">
+                            {Object.values(groupedReactions).map(({ emoji, count, users }) => (
+                                <button
+                                    key={emoji}
+                                    className={`reaction-badge ${users.some(u => u._id === currentUser.id) ? 'own' : ''}`}
+                                    onClick={() => handleAddReaction(message._id, emoji)}
+                                    title={users.map(u => u.name).join(', ')}
+                                >
+                                    <span className="emoji">{emoji}</span>
+                                    {count > 1 && <span className="count">{count}</span>}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Time and read receipt */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <span className="message-time">{formatTime(message.createdAt)}</span>
+                        {isSent && (
+                            <span className={`read-receipt ${message.isRead ? 'read' : 'sent'}`}>
+                                {message.isRead ? <BsCheckAll /> : <BsCheck />}
+                            </span>
+                        )}
+                        {!isSent && (
+                            <button 
+                                className="reply-btn"
+                                onClick={() => handleReply(message)}
+                                style={{ 
+                                    background: 'none', 
+                                    border: 'none', 
+                                    cursor: 'pointer',
+                                    opacity: 0.6,
+                                    padding: '2px'
+                                }}
+                            >
+                                <BsReply />
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
         );
@@ -268,7 +468,7 @@ const MessageArea = ({ selectedUser, messages, currentUser, onStartCall, onBack 
 
             {/* Messages Area */}
             <div className="messages-area">
-                {messages.map(renderMessage)}
+                {localMessages.map(renderMessage)}
 
                 {isTyping(selectedUser._id) && (
                     <div className="typing-indicator">
@@ -286,6 +486,21 @@ const MessageArea = ({ selectedUser, messages, currentUser, onStartCall, onBack 
 
             {/* Message Input */}
             <div className="message-input-area">
+                {/* Reply preview */}
+                {replyingTo && (
+                    <div className="reply-preview">
+                        <div className="reply-preview-content">
+                            <span className="reply-preview-sender">{replyingTo.sender.name}</span>
+                            <span className="reply-preview-text">
+                                {replyingTo.content || 'Media'}
+                            </span>
+                        </div>
+                        <button className="reply-preview-close" onClick={cancelReply}>
+                            <BsXLg />
+                        </button>
+                    </div>
+                )}
+
                 {selectedFile && (
                     <div className="file-preview-bar">
                         <div className="file-preview-icon">
@@ -354,6 +569,19 @@ const MessageArea = ({ selectedUser, messages, currentUser, onStartCall, onBack 
                     </button>
                 </div>
             </div>
+
+            {/* Drag & Drop Overlay */}
+            {isDragging && (
+                <div className="dropzone-overlay" ref={dropzoneRef}>
+                    <div className="dropzone-content">
+                        <div className="dropzone-icon">
+                            <BsCloudUpload />
+                        </div>
+                        <div className="dropzone-text">Drop files here</div>
+                        <div className="dropzone-subtext">Release to attach files to your message</div>
+                    </div>
+                </div>
+            )}
         </>
     );
 };

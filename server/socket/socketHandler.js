@@ -56,6 +56,104 @@ const socketHandler = (io) => {
             }
         });
 
+        // Mark messages as read
+        socket.on('message:read', async (data) => {
+            try {
+                const { messageIds, senderId } = data;
+                
+                const now = new Date();
+                await Message.updateMany(
+                    { _id: { $in: messageIds }, receiver: socket.userId },
+                    { isRead: true, readAt: now }
+                );
+
+                // Notify sender about read receipts
+                const senderSocketId = userSocketMap.get(senderId);
+                if (senderSocketId) {
+                    io.to(senderSocketId).emit('message:read', {
+                        messageIds,
+                        readAt: now,
+                        readBy: socket.userId,
+                    });
+                }
+            } catch (error) {
+                console.error('Error marking messages as read:', error);
+            }
+        });
+
+        // Add reaction to message
+        socket.on('message:react', async (data) => {
+            try {
+                const { messageId, emoji, receiverId } = data;
+                
+                const message = await Message.findById(messageId);
+                if (!message) return;
+
+                // Remove existing reaction from this user
+                message.reactions = message.reactions.filter(
+                    r => r.user.toString() !== socket.userId
+                );
+                
+                // Add new reaction if emoji provided
+                if (emoji) {
+                    message.reactions.push({ user: socket.userId, emoji });
+                }
+                
+                await message.save();
+                await message.populate('reactions.user', 'name avatar');
+
+                // Notify both users
+                const receiverSocketId = userSocketMap.get(receiverId);
+                if (receiverSocketId) {
+                    io.to(receiverSocketId).emit('message:reacted', {
+                        messageId,
+                        reactions: message.reactions,
+                    });
+                }
+                socket.emit('message:reacted', {
+                    messageId,
+                    reactions: message.reactions,
+                });
+            } catch (error) {
+                console.error('Error adding reaction:', error);
+            }
+        });
+
+        // Reply to message
+        socket.on('message:reply', async (data) => {
+            try {
+                const { receiverId, content, messageType, replyToId, fileUrl, fileName, fileSize, mimeType } = data;
+
+                const message = await Message.create({
+                    sender: socket.userId,
+                    receiver: receiverId,
+                    content,
+                    messageType: messageType || 'text',
+                    replyTo: replyToId,
+                    fileUrl,
+                    fileName,
+                    fileSize,
+                    mimeType,
+                });
+
+                await message.populate('sender', 'name avatar');
+                await message.populate('receiver', 'name avatar');
+                await message.populate({
+                    path: 'replyTo',
+                    select: 'content messageType sender',
+                    populate: { path: 'sender', select: 'name' }
+                });
+
+                const receiverSocketId = userSocketMap.get(receiverId);
+                if (receiverSocketId) {
+                    io.to(receiverSocketId).emit('message:receive', message);
+                }
+                socket.emit('message:sent', message);
+            } catch (error) {
+                socket.emit('message:error', { message: error.message });
+            }
+        });
+
         // Typing indicator
         socket.on('typing:start', (receiverId) => {
             const receiverSocketId = userSocketMap.get(receiverId);
@@ -227,6 +325,99 @@ const socketHandler = (io) => {
             } catch (error) {
                 console.error('Error sending chatroom message:', error);
                 socket.emit('chatroom:error', { message: error.message });
+            }
+        });
+
+        // Chatroom message reaction
+        socket.on('chatroom:react', async (data) => {
+            try {
+                const { messageId, emoji, chatroomId } = data;
+                
+                const message = await ChatroomMessage.findById(messageId);
+                if (!message) return;
+
+                // Remove existing reaction from this user
+                message.reactions = message.reactions.filter(
+                    r => r.user.toString() !== socket.userId
+                );
+                
+                // Add new reaction if emoji provided
+                if (emoji) {
+                    message.reactions.push({ user: socket.userId, emoji });
+                }
+                
+                await message.save();
+                await message.populate('reactions.user', 'name avatar');
+
+                // Broadcast to chatroom
+                io.to(`chatroom:${chatroomId}`).emit('chatroom:reacted', {
+                    messageId,
+                    reactions: message.reactions,
+                });
+            } catch (error) {
+                console.error('Error adding chatroom reaction:', error);
+            }
+        });
+
+        // Chatroom reply message
+        socket.on('chatroom:reply', async (data) => {
+            try {
+                const { chatroomId, content, messageType, replyToId, fileUrl, fileName, fileSize, mimeType } = data;
+
+                const chatroom = await Chatroom.findById(chatroomId);
+                if (!chatroom) {
+                    socket.emit('chatroom:error', { message: 'Chatroom not found' });
+                    return;
+                }
+
+                const message = await ChatroomMessage.create({
+                    chatroom: chatroomId,
+                    sender: socket.userId,
+                    content,
+                    messageType: messageType || 'text',
+                    replyTo: replyToId,
+                    fileUrl,
+                    fileName,
+                    fileSize,
+                    mimeType,
+                });
+
+                await message.populate('sender', 'name avatar');
+                await message.populate({
+                    path: 'replyTo',
+                    select: 'content messageType sender',
+                    populate: { path: 'sender', select: 'name' }
+                });
+
+                io.to(`chatroom:${chatroomId}`).emit('chatroom:message', message);
+            } catch (error) {
+                console.error('Error sending chatroom reply:', error);
+                socket.emit('chatroom:error', { message: error.message });
+            }
+        });
+
+        // Pin/unpin chatroom message
+        socket.on('chatroom:pin', async (data) => {
+            try {
+                const { messageId, chatroomId, isPinned } = data;
+                
+                const chatroom = await Chatroom.findById(chatroomId);
+                const isAdmin = chatroom.admins.some(a => a.toString() === socket.userId) ||
+                               chatroom.creator.toString() === socket.userId;
+                
+                if (!isAdmin) {
+                    socket.emit('chatroom:error', { message: 'Only admins can pin messages' });
+                    return;
+                }
+
+                await ChatroomMessage.findByIdAndUpdate(messageId, { isPinned });
+                
+                io.to(`chatroom:${chatroomId}`).emit('chatroom:pinned', {
+                    messageId,
+                    isPinned,
+                });
+            } catch (error) {
+                console.error('Error pinning message:', error);
             }
         });
 

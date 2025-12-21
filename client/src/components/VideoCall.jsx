@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSocket } from '../context/SocketContext';
-import Peer from 'simple-peer';
 import {
     BsMicMute,
     BsMic,
@@ -20,8 +19,16 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
 
     const localVideoRef = useRef(null);
     const remoteVideoRef = useRef(null);
-    const peerRef = useRef(null);
+    const peerConnectionRef = useRef(null);
     const localStreamRef = useRef(null);
+
+    const iceServers = {
+        iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' },
+        ]
+    };
 
     useEffect(() => {
         // Check if we have all necessary functions
@@ -66,7 +73,7 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
             }
 
             // Check if RTCPeerConnection is available
-            if (typeof RTCPeerConnection === 'undefined' && typeof webkitRTCPeerConnection === 'undefined') {
+            if (typeof RTCPeerConnection === 'undefined') {
                 throw new Error('WebRTC RTCPeerConnection is not supported in your browser.');
             }
 
@@ -91,60 +98,64 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
                 localVideoRef.current.srcObject = stream;
             }
 
-            const isInitiator = !incomingOffer;
+            // Create RTCPeerConnection
+            const pc = new RTCPeerConnection(iceServers);
+            peerConnectionRef.current = pc;
 
-            // Create peer with proper configuration
-            const peerOptions = {
-                initiator: isInitiator,
-                trickle: true,
-                stream: stream
+            // Add local stream tracks to peer connection
+            stream.getTracks().forEach(track => {
+                pc.addTrack(track, stream);
+            });
+
+            // Handle incoming tracks
+            pc.ontrack = (event) => {
+                console.log('Received remote track:', event.track.kind);
+                if (remoteVideoRef.current && event.streams[0]) {
+                    remoteVideoRef.current.srcObject = event.streams[0];
+                }
+                setConnectionStatus('connected');
             };
 
-            console.log('Creating peer with options:', peerOptions);
-            const peer = new Peer(peerOptions);
-
-            peer.on('signal', (data) => {
-                console.log('Signal data:', data.type, 'to user:', user._id);
-                if (data.type === 'offer') {
-                    initiateCall(user._id, data, callType);
-                } else if (data.type === 'answer') {
-                    answerCall(user._id, data);
-                } else if (data.candidate) {
-                    sendIceCandidate(user._id, data);
+            // Handle ICE candidates
+            pc.onicecandidate = (event) => {
+                if (event.candidate) {
+                    console.log('Sending ICE candidate');
+                    sendIceCandidate(user._id, event.candidate);
                 }
-            });
+            };
 
-            peer.on('stream', (remoteStream) => {
-                console.log('Received remote stream:', remoteStream);
-                if (remoteVideoRef.current) {
-                    remoteVideoRef.current.srcObject = remoteStream;
+            // Handle connection state changes
+            pc.onconnectionstatechange = () => {
+                console.log('Connection state:', pc.connectionState);
+                if (pc.connectionState === 'connected') {
+                    setConnectionStatus('connected');
+                } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+                    setConnectionStatus('error');
                 }
-                setConnectionStatus('connected');
-            });
+            };
 
-            peer.on('connect', () => {
-                console.log('Peer connected!');
-                setConnectionStatus('connected');
-            });
+            pc.oniceconnectionstatechange = () => {
+                console.log('ICE connection state:', pc.iceConnectionState);
+            };
 
-            peer.on('error', (err) => {
-                console.error('Peer error:', err);
-                setConnectionStatus('error');
-                alert('Call connection error: ' + err.message);
-            });
+            const isInitiator = !incomingOffer;
 
-            peer.on('close', () => {
-                console.log('Peer closed');
-                setConnectionStatus('ended');
-            });
-
-            peerRef.current = peer;
-
-            // If we received an offer, signal it to the peer
-            if (incomingOffer) {
-                console.log('Signaling incoming offer to peer');
-                peer.signal(incomingOffer);
+            if (isInitiator) {
+                // Create and send offer
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                console.log('Created offer, sending to:', user._id);
+                initiateCall(user._id, offer, callType);
+            } else {
+                // Handle incoming offer
+                console.log('Setting remote description from incoming offer');
+                await pc.setRemoteDescription(new RTCSessionDescription(incomingOffer));
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+                console.log('Created answer, sending to:', user._id);
+                answerCall(user._id, answer);
             }
+
         } catch (error) {
             console.error('Failed to start call:', error);
             setConnectionStatus('error');
@@ -168,21 +179,29 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
         }
     };
 
-    const handleCallAnswered = ({ answer }) => {
+    const handleCallAnswered = async ({ answer }) => {
         console.log('Received call answer');
-        if (peerRef.current) {
-            peerRef.current.signal(answer);
-        } else {
-            console.error('No peer reference when answer received');
+        try {
+            if (peerConnectionRef.current) {
+                await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(answer));
+            } else {
+                console.error('No peer connection when answer received');
+            }
+        } catch (err) {
+            console.error('Error setting remote description:', err);
         }
     };
 
-    const handleIceCandidate = ({ candidate }) => {
+    const handleIceCandidate = async ({ candidate }) => {
         console.log('Received ICE candidate');
-        if (peerRef.current && candidate) {
-            peerRef.current.signal(candidate);
-        } else {
-            console.error('No peer reference for ICE candidate');
+        try {
+            if (peerConnectionRef.current && candidate) {
+                await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+            } else {
+                console.error('No peer connection for ICE candidate');
+            }
+        } catch (err) {
+            console.error('Error adding ICE candidate:', err);
         }
     };
 
@@ -200,8 +219,9 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
         if (localStreamRef.current) {
             localStreamRef.current.getTracks().forEach((track) => track.stop());
         }
-        if (peerRef.current) {
-            peerRef.current.destroy();
+        if (peerConnectionRef.current) {
+            peerConnectionRef.current.close();
+            peerConnectionRef.current = null;
         }
     };
 

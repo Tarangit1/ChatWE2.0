@@ -1,5 +1,17 @@
 import mongoose from 'mongoose';
 
+const reactionSchema = new mongoose.Schema({
+    user: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true,
+    },
+    emoji: {
+        type: String,
+        required: true,
+    },
+}, { _id: false });
+
 const chatroomMessageSchema = new mongoose.Schema(
     {
         chatroom: {
@@ -33,12 +45,26 @@ const chatroomMessageSchema = new mongoose.Schema(
         mimeType: {
             type: String,
         },
+        reactions: [reactionSchema],
+        replyTo: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'ChatroomMessage',
+        },
+        isPinned: {
+            type: Boolean,
+            default: false,
+        },
+        isDeleted: {
+            type: Boolean,
+            default: false,
+        },
     },
     { timestamps: true }
 );
 
 // Index for efficient querying
 chatroomMessageSchema.index({ chatroom: 1, createdAt: -1 });
+chatroomMessageSchema.index({ chatroom: 1, isPinned: 1 });
 
 const ChatroomMessage = mongoose.model('ChatroomMessage', chatroomMessageSchema);
 export default ChatroomMessage;

@@ -1,17 +1,19 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
+import { useTheme } from '../context/ThemeContext';
 import ChatList from '../components/ChatList';
 import MessageArea from '../components/MessageArea';
 import ChatroomList from '../components/ChatroomList';
 import ChatroomMessageArea from '../components/ChatroomMessageArea';
 import VideoCall from '../components/VideoCall';
 import IncomingCall from '../components/IncomingCall';
-import { BsChatDots, BsPeople } from 'react-icons/bs';
+import { BsChatDots, BsPeople, BsSun, BsMoon } from 'react-icons/bs';
 
 const Chat = () => {
     const { user, logout } = useAuth();
     const { socket, onlineUsers } = useSocket();
+    const { theme, toggleTheme, isDark } = useTheme();
     const [activeTab, setActiveTab] = useState('chats'); // 'chats' or 'chatrooms'
     const [users, setUsers] = useState([]);
     const [selectedUser, setSelectedUser] = useState(null);
@@ -177,26 +179,36 @@ const Chat = () => {
                         <img src="https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/chatbetter.png" alt="ChatWe" />
                         <h1>ChatWe</h1>
                     </div>
-                    <div className="user-menu">
-                        <img
-                            src={user?.avatar || '/default-avatar.png'}
-                            alt={user?.name}
-                            className="user-avatar"
-                            onClick={() => setShowDropdown(!showDropdown)}
-                        />
-                        {showDropdown && (
-                            <div className="user-dropdown">
-                                <div className="user-dropdown-item">
-                                    <span>{user?.name}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {/* Theme Toggle */}
+                        <button 
+                            className="theme-toggle" 
+                            onClick={toggleTheme}
+                            title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+                        >
+                            {isDark ? <BsSun /> : <BsMoon />}
+                        </button>
+                        <div className="user-menu">
+                            <img
+                                src={user?.avatar || '/default-avatar.png'}
+                                alt={user?.name}
+                                className="user-avatar"
+                                onClick={() => setShowDropdown(!showDropdown)}
+                            />
+                            {showDropdown && (
+                                <div className="user-dropdown">
+                                    <div className="user-dropdown-item">
+                                        <span>{user?.name}</span>
+                                    </div>
+                                    <button
+                                        className="user-dropdown-item logout"
+                                        onClick={logout}
+                                    >
+                                        Logout
+                                    </button>
                                 </div>
-                                <button
-                                    className="user-dropdown-item logout"
-                                    onClick={logout}
-                                >
-                                    Logout
-                                </button>
-                            </div>
-                        )}
+                            )}
+                        </div>
                     </div>
                 </header>
 

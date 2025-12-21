@@ -36,15 +36,69 @@ router.get('/conversation/:userId', isAuthenticated, async (req, res) => {
         })
             .sort({ createdAt: 1 })
             .populate('sender', 'name avatar')
-            .populate('receiver', 'name avatar');
+            .populate('receiver', 'name avatar')
+            .populate('reactions.user', 'name avatar')
+            .populate({
+                path: 'replyTo',
+                select: 'content messageType sender',
+                populate: { path: 'sender', select: 'name' }
+            });
 
         // Mark messages as read
+        const now = new Date();
         await Message.updateMany(
             { sender: userId, receiver: req.user._id, isRead: false },
-            { isRead: true }
+            { isRead: true, readAt: now }
         );
 
         res.json({ success: true, messages });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// Mark specific messages as read
+router.post('/mark-read', isAuthenticated, async (req, res) => {
+    try {
+        const { messageIds } = req.body;
+        const now = new Date();
+        
+        await Message.updateMany(
+            { _id: { $in: messageIds }, receiver: req.user._id },
+            { isRead: true, readAt: now }
+        );
+
+        res.json({ success: true, readAt: now });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// Add reaction to message
+router.post('/:messageId/react', isAuthenticated, async (req, res) => {
+    try {
+        const { messageId } = req.params;
+        const { emoji } = req.body;
+
+        const message = await Message.findById(messageId);
+        if (!message) {
+            return res.status(404).json({ success: false, message: 'Message not found' });
+        }
+
+        // Remove existing reaction from this user
+        message.reactions = message.reactions.filter(
+            r => r.user.toString() !== req.user._id.toString()
+        );
+        
+        // Add new reaction if emoji provided
+        if (emoji) {
+            message.reactions.push({ user: req.user._id, emoji });
+        }
+        
+        await message.save();
+        await message.populate('reactions.user', 'name avatar');
+
+        res.json({ success: true, reactions: message.reactions });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

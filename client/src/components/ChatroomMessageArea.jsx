@@ -25,8 +25,7 @@ const ChatroomMessageArea = ({ chatroom, onBack }) => {
     const [showFileUpload, setShowFileUpload] = useState(false);
     const [selectedFile, setSelectedFile] = useState(null);
     const [typingUsers, setTypingUsers] = useState(new Set());
-    const [showKeyModal, setShowKeyModal] = useState(false);
-    const [accessKeyData, setAccessKeyData] = useState(null);
+    const [accessKey, setAccessKey] = useState(null);
     const messagesEndRef = useRef(null);
     const typingTimeoutRef = useRef(null);
     const inputRef = useRef(null);
@@ -38,6 +37,11 @@ const ChatroomMessageArea = ({ chatroom, onBack }) => {
         if (chatroom) {
             fetchMessages();
             joinChatroom();
+            
+            // Fetch access key if user is admin/creator and room is private
+            if (chatroom.isPrivate && (isAdmin || isCreator)) {
+                fetchAccessKey();
+            }
 
             socket?.on('chatroom:message', handleNewMessage);
             socket?.on('chatroom:typing', handleTyping);
@@ -245,25 +249,16 @@ const ChatroomMessageArea = ({ chatroom, onBack }) => {
                 `${API_URL}/api/chatrooms/${chatroom._id}/access-key`,
                 { withCredentials: true }
             );
-            setAccessKeyData(response.data);
-            setShowKeyModal(true);
+            setAccessKey(response.data.accessKey);
         } catch (error) {
             console.error('Error fetching access key:', error);
-            alert(error.response?.data?.message || 'Failed to fetch access key');
         }
     };
 
     const handleCopyKey = () => {
-        if (accessKeyData?.accessKey) {
-            navigator.clipboard.writeText(accessKeyData.accessKey);
+        if (accessKey) {
+            navigator.clipboard.writeText(accessKey);
             alert('Access key copied to clipboard!');
-        }
-    };
-
-    const handleCopyRoomId = () => {
-        if (chatroom?._id) {
-            navigator.clipboard.writeText(chatroom._id);
-            alert('Room ID copied to clipboard!');
         }
     };
 
@@ -395,14 +390,18 @@ const ChatroomMessageArea = ({ chatroom, onBack }) => {
                         </div>
                     </div>
                 </div>
-                {chatroom.isPrivate && (isAdmin || isCreator) && (
-                    <button 
-                        className="show-key-btn" 
-                        onClick={fetchAccessKey}
-                        title="View Access Key"
-                    >
-                        <BsKey />
-                    </button>
+                {chatroom.isPrivate && (isAdmin || isCreator) && accessKey && (
+                    <div className="access-key-display">
+                        <span className="access-key-label">Access Key:</span>
+                        <code className="access-key-value">{accessKey}</code>
+                        <button 
+                            className="copy-key-icon-btn" 
+                            onClick={handleCopyKey}
+                            title="Copy to clipboard"
+                        >
+                            📋
+                        </button>
+                    </div>
                 )}
             </header>
 
@@ -494,37 +493,6 @@ const ChatroomMessageArea = ({ chatroom, onBack }) => {
                     </button>
                 </div>
             </div>
-
-            {/* Access Key Modal */}
-            {showKeyModal && accessKeyData && (
-                <div className="modal-overlay" onClick={() => setShowKeyModal(false)}>
-                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-                        <h2>🔒 Private Room Access Key</h2>
-                        <p className="key-info">Share this with people you want to invite:</p>
-
-                        <div className="form-group">
-                            <label>Access Key</label>
-                            <div className="key-display-box">
-                                <code className="generated-key">{accessKeyData.accessKey}</code>
-                                <button 
-                                    onClick={handleCopyKey} 
-                                    className="copy-key-btn"
-                                    title="Copy to clipboard"
-                                >
-                                    📋 Copy
-                                </button>
-                            </div>
-                            <small>Others can paste this key in the input field at the top of chatrooms list</small>
-                        </div>
-
-                        <div className="modal-actions">
-                            <button onClick={() => setShowKeyModal(false)} className="btn-primary">
-                                Close
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </>
     );
 };
