@@ -262,8 +262,6 @@ const MessageArea = ({ selectedUser, messages, currentUser, onStartCall, onBack 
             <div 
                 key={message._id} 
                 className={`message-group ${isSent ? 'sent' : ''}`}
-                onDoubleClick={() => handleReply(message)}
-                style={{ cursor: 'pointer' }}
             >
                 {!isSent && (
                     <img
@@ -286,7 +284,10 @@ const MessageArea = ({ selectedUser, messages, currentUser, onStartCall, onBack 
                     )}
 
                     {message.messageType === 'text' && (
-                        <div className="message-bubble">
+                        <div 
+                            className="message-bubble"
+                            onDoubleClick={() => handleReply(message)}
+                        >
                             <p className="message-text">{message.content}</p>
                             
                             {/* Reaction picker trigger */}
