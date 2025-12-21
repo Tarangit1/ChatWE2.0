@@ -3,15 +3,19 @@ import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import ChatList from '../components/ChatList';
 import MessageArea from '../components/MessageArea';
+import ChatroomList from '../components/ChatroomList';
+import ChatroomMessageArea from '../components/ChatroomMessageArea';
 import VideoCall from '../components/VideoCall';
 import IncomingCall from '../components/IncomingCall';
-import { BsChatDots } from 'react-icons/bs';
+import { BsChatDots, BsPeople } from 'react-icons/bs';
 
 const Chat = () => {
     const { user, logout } = useAuth();
     const { socket, onlineUsers } = useSocket();
+    const [activeTab, setActiveTab] = useState('chats'); // 'chats' or 'chatrooms'
     const [users, setUsers] = useState([]);
     const [selectedUser, setSelectedUser] = useState(null);
+    const [selectedChatroom, setSelectedChatroom] = useState(null);
     const [messages, setMessages] = useState([]);
     const [unreadCounts, setUnreadCounts] = useState({});
     const [showDropdown, setShowDropdown] = useState(false);
@@ -134,6 +138,12 @@ const Chat = () => {
 
     const handleSelectUser = (chatUser) => {
         setSelectedUser(chatUser);
+        setSelectedChatroom(null);
+    };
+
+    const handleSelectChatroom = (chatroom) => {
+        setSelectedChatroom(chatroom);
+        setSelectedUser(null);
     };
 
     const handleStartCall = (type) => {
@@ -161,7 +171,7 @@ const Chat = () => {
     return (
         <div className="chat-layout">
             {/* Sidebar with Chat List */}
-            <aside className={`sidebar ${selectedUser ? 'has-selection' : ''}`}>
+            <aside className={`sidebar ${selectedUser || selectedChatroom ? 'has-selection' : ''}`}>
                 <header className="sidebar-header">
                     <div className="sidebar-logo">
                         <img src="https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/chatbetter.png" alt="ChatWe" />
@@ -190,35 +200,74 @@ const Chat = () => {
                     </div>
                 </header>
 
-                <ChatList
-                    users={users}
-                    selectedUser={selectedUser}
-                    onSelectUser={handleSelectUser}
-                    unreadCounts={unreadCounts}
-                    onlineUsers={onlineUsers}
-                />
+                {/* Tab Navigation */}
+                <div className="chat-tabs">
+                    <button
+                        className={`tab-button ${activeTab === 'chats' ? 'active' : ''}`}
+                        onClick={() => {
+                            setActiveTab('chats');
+                            setSelectedChatroom(null);
+                        }}
+                    >
+                        <BsChatDots />
+                        <span>Chats</span>
+                    </button>
+                    <button
+                        className={`tab-button ${activeTab === 'chatrooms' ? 'active' : ''}`}
+                        onClick={() => {
+                            setActiveTab('chatrooms');
+                            setSelectedUser(null);
+                        }}
+                    >
+                        <BsPeople />
+                        <span>Rooms</span>
+                    </button>
+                </div>
+
+                {/* Content based on active tab */}
+                {activeTab === 'chats' ? (
+                    <ChatList
+                        users={users}
+                        selectedUser={selectedUser}
+                        onSelectUser={handleSelectUser}
+                        unreadCounts={unreadCounts}
+                        onlineUsers={onlineUsers}
+                    />
+                ) : (
+                    <ChatroomList
+                        selectedChatroomId={selectedChatroom?._id}
+                        onSelectChatroom={handleSelectChatroom}
+                    />
+                )}
             </aside>
 
             {/* Main Chat Area */}
-            <main className={`chat-main ${selectedUser ? 'has-selection' : ''}`}>
-                {selectedUser ? (
-                    <MessageArea
-                        selectedUser={selectedUser}
-                        messages={messages}
-                        currentUser={user}
-                        onStartCall={handleStartCall}
-                        onBack={() => setSelectedUser(null)}
-                    />
-                ) : (
-                    <div className="empty-state">
-                        <div className="empty-state-icon">
-                            <BsChatDots />
+            <main className={`chat-main ${selectedUser || selectedChatroom ? 'has-selection' : ''}`}>
+                {activeTab === 'chats' ? (
+                    selectedUser ? (
+                        <MessageArea
+                            selectedUser={selectedUser}
+                            messages={messages}
+                            currentUser={user}
+                            onStartCall={handleStartCall}
+                            onBack={() => setSelectedUser(null)}
+                        />
+                    ) : (
+                        <div className="empty-state">
+                            <div className="empty-state-icon">
+                                <BsChatDots />
+                            </div>
+                            <h2 className="empty-state-title">Welcome to ChatWe</h2>
+                            <p className="empty-state-subtitle">
+                                Select a conversation to start messaging
+                            </p>
                         </div>
-                        <h2 className="empty-state-title">Welcome to ChatWe</h2>
-                        <p className="empty-state-subtitle">
-                            Select a conversation to start messaging
-                        </p>
-                    </div>
+                    )
+                ) : (
+                    <ChatroomMessageArea
+                        chatroom={selectedChatroom}
+                        onBack={() => setSelectedChatroom(null)}
+                    />
                 )}
             </main>
 

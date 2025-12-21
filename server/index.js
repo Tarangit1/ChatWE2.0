@@ -13,6 +13,7 @@ import configurePassport from './config/passport.js';
 import authRoutes from './routes/auth.js';
 import messageRoutes from './routes/messages.js';
 import uploadRoutes from './routes/upload.js';
+import chatroomRoutes from './routes/chatrooms.js';
 import socketHandler from './socket/socketHandler.js';
 
 dotenv.config();
@@ -75,6 +76,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/auth', authRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/chatrooms', chatroomRoutes);
 
 // Health check route
 app.get('/health', (req, res) => {

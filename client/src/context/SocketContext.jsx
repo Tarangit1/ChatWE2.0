@@ -121,6 +121,7 @@ export const SocketProvider = ({ children }) => {
 
     const value = {
         socket,
+        user,
         onlineUsers,
         typingUsers,
         sendMessage,

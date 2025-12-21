@@ -600,6 +600,7 @@ input, textarea {
   display: flex;
   gap: var(--spacing-sm);
   max-width: 70%;
+  min-width: 0;
 }
 
 .message-group.sent {
@@ -612,12 +613,15 @@ input, textarea {
   height: 32px;
   border-radius: var(--radius-full);
   align-self: flex-end;
+  flex-shrink: 0;
 }
 
 .message-content {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .message-bubble {
@@ -626,7 +630,12 @@ input, textarea {
   background: var(--bg-card);
   border: 1px solid var(--glass-border);
   max-width: 100%;
+  min-width: 0;
   word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  white-space: normal;
+  overflow: hidden;
 }
 
 .message-group.sent .message-bubble {
@@ -637,6 +646,11 @@ input, textarea {
 .message-text {
   font-size: 0.95rem;
   line-height: 1.5;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  white-space: normal;
+  max-width: 100%;
 }
 
 .message-time {
@@ -1200,11 +1214,16 @@ input, textarea {
   font-size: 1.3rem;
   font-weight: 600;
   color: var(--text-secondary);
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  max-width: 90%;
 }
 
 .empty-state-subtitle {
   font-size: 0.95rem;
   max-width: 300px;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 /* ============================
@@ -1361,9 +1380,23 @@ input, textarea {
     padding: 1rem 0.75rem;
   }
 
-  .message-bubble {
+  .message-group {
     max-width: 85%;
+  }
+
+  .message-bubble {
+    max-width: 100%;
     font-size: 0.9375rem;
+    padding: 0.5rem 0.75rem;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+
+  .message-text {
+    font-size: 0.9375rem;
+    line-height: 1.45;
+    word-break: break-word;
+    overflow-wrap: anywhere;
   }
 
   /* Input area */
@@ -1487,13 +1520,34 @@ input, textarea {
 
   .empty-state-title {
     font-size: 1.25rem;
+    max-width: 85%;
+  }
+
+  .empty-state-subtitle {
+    font-size: 0.9rem;
+    max-width: 85%;
   }
 }
 
 /* Small mobile phones */
 @media (max-width: 480px) {
-  .message-bubble {
+  .message-group {
     max-width: 90%;
+  }
+
+  .message-bubble {
+    max-width: 100%;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: 0.9rem;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+
+  .message-text {
+    font-size: 0.9rem;
+    line-height: 1.4;
+    word-break: break-word;
+    overflow-wrap: anywhere;
   }
 
   .video-stream.local {
@@ -1560,6 +1614,455 @@ input, textarea {
 
   .message-input-area {
     padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+}
+
+/* ============================
+   Chatroom Tabs
+   ============================ */
+
+.chat-tabs {
+  display: flex;
+  gap: 0;
+  padding: var(--spacing-sm);
+  background: var(--bg-darker);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.tab-button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-base);
+}
+
+.tab-button:hover {
+  background: var(--bg-card);
+  color: var(--text-secondary);
+}
+
+.tab-button.active {
+  background: var(--primary-gradient);
+  color: var(--text-primary);
+}
+
+.tab-button svg {
+  font-size: 1.2rem;
+}
+
+/* ============================
+   Chatroom List
+   ============================ */
+
+.chatroom-list {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.chatroom-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-md);
+  background: var(--bg-darker);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.chatroom-list-header h2 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.create-room-btn {
+  background: var(--primary-gradient);
+  border: none;
+  color: var(--text-primary);
+  padding: var(--spacing-sm);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  transition: all var(--transition-base);
+}
+
+.create-room-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.chatrooms-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--spacing-sm);
+}
+
+.chatroom-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  background: var(--bg-card);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--spacing-sm);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  position: relative;
+}
+
+.chatroom-item:hover {
+  background: var(--bg-card-hover);
+  transform: translateY(-2px);
+}
+
+.chatroom-item.active {
+  background: var(--primary-gradient);
+  border-color: transparent;
+}
+
+.chatroom-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.chatroom-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.chatroom-avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--primary-gradient);
+  font-size: 1.5rem;
+  color: var(--text-primary);
+}
+
+.chatroom-info {
+  flex: 1;
+  overflow: hidden;
+}
+
+.chatroom-name-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-xs);
+}
+
+.chatroom-name-row h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.private-icon {
+  font-size: 0.9rem;
+  color: var(--warning-color);
+  flex-shrink: 0;
+}
+
+.private-icon-header {
+  font-size: 1rem;
+  color: var(--warning-color);
+  margin-left: var(--spacing-sm);
+}
+
+.chatroom-members {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-xs);
+}
+
+.chatroom-description {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chatroom-actions {
+  display: flex;
+  gap: var(--spacing-xs);
+}
+
+.action-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: var(--spacing-xs);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  transition: all var(--transition-fast);
+}
+
+.action-btn:hover {
+  background: var(--bg-card-hover);
+}
+
+.action-btn.delete:hover {
+  background: var(--error-color);
+  color: var(--text-primary);
+}
+
+.action-btn.leave:hover {
+  background: var(--warning-color);
+  color: var(--text-primary);
+}
+
+/* ============================
+   Chatroom Modals
+   ============================ */
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn var(--transition-base);
+}
+
+.modal-content {
+  background: var(--bg-dark);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-xl);
+  max-width: 500px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: var(--glass-shadow);
+  animation: slideUp var(--transition-base);
+}
+
+.modal-content h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0 0 var(--spacing-lg);
+  background: var(--primary-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.form-group {
+  margin-bottom: var(--spacing-md);
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin-bottom: var(--spacing-xs);
+  color: var(--text-secondary);
+}
+
+.form-group input,
+.form-group textarea {
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-card);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  transition: all var(--transition-fast);
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  background: var(--bg-card-hover);
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 80px;
+  font-family: inherit;
+}
+
+.form-group small {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: var(--spacing-xs);
+}
+
+.checkbox-group label {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkbox-group input[type="checkbox"] {
+  width: auto;
+  cursor: pointer;
+}
+
+.modal-actions {
+  display: flex;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-lg);
+}
+
+.btn-primary,
+.btn-secondary {
+  flex: 1;
+  padding: var(--spacing-sm) var(--spacing-lg);
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.btn-primary {
+  background: var(--primary-gradient);
+  color: var(--text-primary);
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.btn-secondary {
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  border: 1px solid var(--glass-border);
+}
+
+.btn-secondary:hover {
+  background: var(--bg-card-hover);
+}
+
+.chatroom-header-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.chatroom-members-count {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin: 0;
+}
+
+.message-sender {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-bottom: var(--spacing-xs);
+  font-weight: 500;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Mobile optimizations for chatrooms */
+@media (max-width: 768px) {
+  .chat-tabs {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .tab-button span {
+    display: none;
+  }
+
+  .tab-button {
+    padding: var(--spacing-sm);
+  }
+
+  .chatroom-item {
+    padding: var(--spacing-sm);
+  }
+
+  .chatroom-avatar {
+    width: 40px;
+    height: 40px;
+  }
+
+  .chatroom-description {
+    display: none;
+  }
+
+  .modal-content {
+    padding: var(--spacing-lg);
+    max-width: 95%;
+  }
+
+  .modal-actions {
+    flex-direction: column;
+  }
+
+  .btn-primary,
+  .btn-secondary {
+    width: 100%;
   }
 }
 

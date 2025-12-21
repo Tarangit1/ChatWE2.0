@@ -1,5 +1,7 @@
 import Message from '../models/Message.js';
 import User from '../models/User.js';
+import Chatroom from '../models/Chatroom.js';
+import ChatroomMessage from '../models/ChatroomMessage.js';
 
 const userSocketMap = new Map(); // Map userId to socketId
 
@@ -122,6 +124,82 @@ const socketHandler = (io) => {
                     from: socket.userId,
                 });
             }
+        });
+
+        // Chatroom events
+        socket.on('chatroom:join', async (chatroomId) => {
+            try {
+                const chatroom = await Chatroom.findById(chatroomId);
+                if (chatroom && chatroom.members.includes(socket.userId)) {
+                    socket.join(`chatroom:${chatroomId}`);
+                    console.log(`User ${socket.userId} joined chatroom ${chatroomId}`);
+                    
+                    // Notify other members
+                    socket.to(`chatroom:${chatroomId}`).emit('chatroom:user-joined', {
+                        userId: socket.userId,
+                        chatroomId,
+                    });
+                }
+            } catch (error) {
+                console.error('Error joining chatroom:', error);
+            }
+        });
+
+        socket.on('chatroom:leave', (chatroomId) => {
+            socket.leave(`chatroom:${chatroomId}`);
+            socket.to(`chatroom:${chatroomId}`).emit('chatroom:user-left', {
+                userId: socket.userId,
+                chatroomId,
+            });
+            console.log(`User ${socket.userId} left chatroom ${chatroomId}`);
+        });
+
+        socket.on('chatroom:message', async (data) => {
+            try {
+                const { chatroomId, content, messageType, fileUrl, fileName, fileSize, mimeType } = data;
+
+                // Verify user is a member
+                const chatroom = await Chatroom.findById(chatroomId);
+                if (!chatroom || !chatroom.members.includes(socket.userId)) {
+                    socket.emit('chatroom:error', { message: 'Not a member of this chatroom' });
+                    return;
+                }
+
+                // Create message in database
+                const message = await ChatroomMessage.create({
+                    chatroom: chatroomId,
+                    sender: socket.userId,
+                    content,
+                    messageType: messageType || 'text',
+                    fileUrl,
+                    fileName,
+                    fileSize,
+                    mimeType,
+                });
+
+                // Populate sender details
+                await message.populate('sender', 'name avatar');
+
+                // Broadcast to all chatroom members
+                io.to(`chatroom:${chatroomId}`).emit('chatroom:message', message);
+            } catch (error) {
+                console.error('Error sending chatroom message:', error);
+                socket.emit('chatroom:error', { message: error.message });
+            }
+        });
+
+        socket.on('chatroom:typing', (chatroomId) => {
+            socket.to(`chatroom:${chatroomId}`).emit('chatroom:typing', {
+                userId: socket.userId,
+                chatroomId,
+            });
+        });
+
+        socket.on('chatroom:stop-typing', (chatroomId) => {
+            socket.to(`chatroom:${chatroomId}`).emit('chatroom:stop-typing', {
+                userId: socket.userId,
+                chatroomId,
+            });
         });
 
         // Disconnect
