@@ -1,0 +1,22 @@
+{
+  "$schema": "https://raw.githubusercontent.com/netlify/build/main/packages/config/schema.json",
+  "build": {
+    "base": "client",
+    "publish": "dist",
+    "command": "npm install && npm run build"
+  },
+  "redirects": [
+    {
+      "from": "/api/*",
+      "to": "https://your-backend-url.onrender.com/api/:splat",
+      "status": 200,
+      "force": true
+    },
+    {
+      "from": "/auth/*",
+      "to": "https://your-backend-url.onrender.com/auth/:splat",
+      "status": 200,
+      "force": true
+    }
+  ]
+}
