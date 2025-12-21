@@ -10,10 +10,13 @@ import {
 } from 'react-icons/bs';
 
 const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
-    const { socket, initiateCall, answerCall, sendIceCandidate, endCall } = useSocket();
+    const socketContext = useSocket();
+    const { socket, initiateCall, answerCall, sendIceCandidate, endCall } = socketContext || {};
+    
     const [isMuted, setIsMuted] = useState(false);
     const [isVideoOff, setIsVideoOff] = useState(callType === 'voice');
     const [connectionStatus, setConnectionStatus] = useState('connecting');
+    const [error, setError] = useState(null);
 
     const localVideoRef = useRef(null);
     const remoteVideoRef = useRef(null);
@@ -21,12 +24,18 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
     const localStreamRef = useRef(null);
 
     useEffect(() => {
+        // Check if we have all necessary functions
+        if (!socket || !initiateCall || !answerCall || !sendIceCandidate || !endCall) {
+            setError('Socket connection not ready. Please refresh the page.');
+            return;
+        }
+
         startCall();
 
         return () => {
             cleanup();
         };
-    }, []);
+    }, [socket]);
 
     useEffect(() => {
         if (socket) {
@@ -46,12 +55,24 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
 
     const startCall = async () => {
         try {
+            // Validate that we have all required functions
+            if (!initiateCall || !answerCall || !sendIceCandidate) {
+                throw new Error('Call functions not available');
+            }
+
             console.log('Starting call, type:', callType, 'isInitiator:', !incomingOffer);
             
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: callType === 'video',
+            // Request media with better error handling
+            const constraints = {
                 audio: true,
-            });
+                video: callType === 'video' ? {
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                    facingMode: 'user'
+                } : false
+            };
+
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
 
             console.log('Got media stream:', stream.getTracks().map(t => t.kind));
 
@@ -66,11 +87,15 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
                 initiator: isInitiator,
                 trickle: true,
                 stream,
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' },
-                    { urls: 'stun:stun2.l.google.com:19302' }
-                ]
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'stun:stun2.l.google.com:19302' },
+                        { urls: 'stun:stun3.l.google.com:19302' },
+                        { urls: 'stun:stun4.l.google.com:19302' }
+                    ]
+                }
             });
 
             peer.on('signal', (data) => {
@@ -118,7 +143,23 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
         } catch (error) {
             console.error('Failed to start call:', error);
             setConnectionStatus('error');
-            alert('Failed to access camera/microphone: ' + error.message);
+            
+            // More specific error messages
+            let errorMessage = 'Failed to start call: ';
+            if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+                errorMessage += 'Camera/microphone permission denied. Please allow access and try again.';
+            } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+                errorMessage += 'No camera/microphone found. Please connect a device and try again.';
+            } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
+                errorMessage += 'Camera/microphone is already in use by another application.';
+            } else {
+                errorMessage += error.message;
+            }
+            
+            setError(errorMessage);
+            setTimeout(() => {
+                onEndCall();
+            }, 3000);
         }
     };
 
@@ -180,10 +221,30 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
     };
 
     const handleEndCall = () => {
-        endCall(user._id);
+        if (endCall && user?._id) {
+            endCall(user._id);
+        }
         cleanup();
         onEndCall();
     };
+
+    // Show error screen if there's an error
+    if (error) {
+        return (
+            <div className="video-call-overlay">
+                <div className="video-call-container">
+                    <div className="call-error">
+                        <div className="error-icon">⚠️</div>
+                        <h3>Call Failed</h3>
+                        <p>{error}</p>
+                        <button onClick={onEndCall} className="btn-end-call">
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="video-call-overlay">
