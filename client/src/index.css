@@ -98,69 +98,69 @@
   --primary: #818cf8;
   --primary-hover: #a5b4fc;
   --primary-light: #6366f1;
-  --primary-bg: rgba(129, 140, 248, 0.15);
+  --primary-bg: rgba(129, 140, 248, 0.12);
   
   --accent: #22d3ee;
   --accent-hover: #67e8f9;
   
   --success: #34d399;
-  --success-bg: rgba(52, 211, 153, 0.15);
+  --success-bg: rgba(52, 211, 153, 0.12);
   --warning: #fbbf24;
-  --warning-bg: rgba(251, 191, 36, 0.15);
+  --warning-bg: rgba(251, 191, 36, 0.12);
   --error: #f87171;
-  --error-bg: rgba(248, 113, 113, 0.15);
+  --error-bg: rgba(248, 113, 113, 0.12);
 
-  /* Backgrounds */
-  --bg-primary: #0f172a;
-  --bg-secondary: #1e293b;
-  --bg-tertiary: #334155;
-  --bg-hover: #334155;
-  --bg-active: #475569;
+  /* Backgrounds - Much Darker */
+  --bg-primary: #030712;
+  --bg-secondary: #0a0f1a;
+  --bg-tertiary: #111827;
+  --bg-hover: #1f2937;
+  --bg-active: #374151;
   
-  /* Sidebar/Panel */
-  --sidebar-bg: #1e293b;
-  --chat-bg: #0f172a;
+  /* Sidebar/Panel - Darker */
+  --sidebar-bg: #0a0f1a;
+  --chat-bg: #030712;
   
   /* Text Colors */
-  --text-primary: #f1f5f9;
-  --text-secondary: #cbd5e1;
-  --text-muted: #64748b;
-  --text-inverse: #0f172a;
+  --text-primary: #f9fafb;
+  --text-secondary: #d1d5db;
+  --text-muted: #6b7280;
+  --text-inverse: #030712;
   
-  /* Borders */
-  --border-light: #334155;
-  --border-medium: #475569;
-  --border-dark: #64748b;
+  /* Borders - Subtler */
+  --border-light: #1f2937;
+  --border-medium: #374151;
+  --border-dark: #4b5563;
   
   /* Message Bubbles */
   --msg-sent-bg: #6366f1;
   --msg-sent-text: #ffffff;
-  --msg-received-bg: #334155;
-  --msg-received-text: #f1f5f9;
+  --msg-received-bg: #1f2937;
+  --msg-received-text: #f9fafb;
   
   /* Status */
   --online: #34d399;
-  --offline: #64748b;
+  --offline: #6b7280;
   --typing: #818cf8;
   
-  /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+  /* Shadows - Deeper */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.6);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.7);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.8);
 
-  /* Input */
-  --input-bg: #1e293b;
-  --input-border: #334155;
+  /* Input - Darker */
+  --input-bg: #0a0f1a;
+  --input-border: #1f2937;
   --input-focus: #818cf8;
 
   /* Scrollbar */
-  --scrollbar-bg: #1e293b;
-  --scrollbar-thumb: #475569;
+  --scrollbar-bg: #0a0f1a;
+  --scrollbar-thumb: #374151;
 
   /* Glass effect for dark mode */
-  --glass-bg: rgba(30, 41, 59, 0.8);
-  --glass-border: rgba(51, 65, 85, 0.5);
+  --glass-bg: rgba(10, 15, 26, 0.9);
+  --glass-border: rgba(31, 41, 55, 0.6);
 }
 
 /* ============================
