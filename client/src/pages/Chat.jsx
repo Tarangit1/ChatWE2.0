@@ -164,7 +164,7 @@ const Chat = () => {
             <aside className="sidebar">
                 <header className="sidebar-header">
                     <div className="sidebar-logo">
-                        <img src="/chat-icon.svg" alt="ChatWe" />
+                        <img src="https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/chatbetter.png" alt="ChatWe" />
                         <h1>ChatWe</h1>
                     </div>
                     <div className="user-menu">

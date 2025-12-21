@@ -14,7 +14,7 @@ const Login = () => {
         <div className="login-page">
             <div className="login-container glass-card">
                 <img
-                    src="/chat-icon.svg"
+                    src="https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/chatbetter.png"
                     alt="ChatWe Logo"
                     className="login-logo"
                 />
