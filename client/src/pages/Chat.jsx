@@ -149,6 +149,7 @@ const Chat = () => {
     };
 
     const handleStartCall = (type) => {
+        setCallOffer(null); // Clear any previous offer - we're initiating, not answering
         setCallType(type);
         setInCall(true);
     };
