@@ -54,7 +54,9 @@ router.post('/file', isAuthenticated, upload.single('file'), (req, res) => {
             return res.status(400).json({ success: false, message: 'No file uploaded' });
         }
 
-        const fileUrl = `/uploads/${req.file.filename}`;
+        // Use full URL in production
+        const baseUrl = process.env.BACKEND_URL || `${req.protocol}://${req.get('host')}`;
+        const fileUrl = `${baseUrl}/uploads/${req.file.filename}`;
 
         res.json({
             success: true,

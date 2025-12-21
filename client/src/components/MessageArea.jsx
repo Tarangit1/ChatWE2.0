@@ -12,9 +12,10 @@ import {
     BsFileEarmark,
     BsImage,
     BsPlayCircle,
+    BsArrowLeft,
 } from 'react-icons/bs';
 
-const MessageArea = ({ selectedUser, messages, currentUser, onStartCall }) => {
+const MessageArea = ({ selectedUser, messages, currentUser, onStartCall, onBack }) => {
     const { sendMessage, startTyping, stopTyping, isOnline, isTyping } = useSocket();
     const [messageText, setMessageText] = useState('');
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -228,6 +229,9 @@ const MessageArea = ({ selectedUser, messages, currentUser, onStartCall }) => {
         <>
             {/* Chat Header */}
             <header className="chat-header">
+                <button className="mobile-back-btn" onClick={onBack} title="Back">
+                    <BsArrowLeft />
+                </button>
                 <div className="chat-header-info">
                     <img
                         src={selectedUser.avatar || '/default-avatar.png'}

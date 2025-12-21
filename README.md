@@ -1,4 +1,4 @@
-# ChatFlow - MERN Chat Application
+# ChatWe - MERN Chat Application
 
 A real-time chat application built with the MERN stack featuring Google OAuth authentication, real-time messaging, file sharing, emoji/GIF support, and voice/video calls.
 

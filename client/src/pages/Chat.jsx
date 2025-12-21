@@ -164,8 +164,8 @@ const Chat = () => {
             <aside className="sidebar">
                 <header className="sidebar-header">
                     <div className="sidebar-logo">
-                        <img src="/chat-icon.svg" alt="ChatFlow" />
-                        <h1>ChatFlow</h1>
+                        <img src="/chat-icon.svg" alt="ChatWe" />
+                        <h1>ChatWe</h1>
                     </div>
                     <div className="user-menu">
                         <img
@@ -207,13 +207,14 @@ const Chat = () => {
                         messages={messages}
                         currentUser={user}
                         onStartCall={handleStartCall}
+                        onBack={() => setSelectedUser(null)}
                     />
                 ) : (
                     <div className="empty-state">
                         <div className="empty-state-icon">
                             <BsChatDots />
                         </div>
-                        <h2 className="empty-state-title">Welcome to ChatFlow</h2>
+                        <h2 className="empty-state-title">Welcome to ChatWe</h2>
                         <p className="empty-state-subtitle">
                             Select a conversation to start messaging
                         </p>

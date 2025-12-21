@@ -15,10 +15,10 @@ const Login = () => {
             <div className="login-container glass-card">
                 <img
                     src="/chat-icon.svg"
-                    alt="ChatFlow Logo"
+                    alt="ChatWe Logo"
                     className="login-logo"
                 />
-                <h1 className="login-title">ChatFlow</h1>
+                <h1 className="login-title">ChatWe</h1>
                 <p className="login-subtitle">
                     Connect with friends through instant messaging, voice & video calls
                 </p>

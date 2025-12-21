@@ -47,7 +47,8 @@ const EmojiGifPicker = ({ onEmojiSelect, onGifSelect, onClose }) => {
     }, [gifSearch, activeTab]);
 
     const fetchTrendingGifs = async () => {
-        if (!GIPHY_API_KEY || GIPHY_API_KEY === 'YOUR_GIPHY_API_KEY') {
+        if (!GIPHY_API_KEY || GIPHY_API_KEY === 'YOUR_GIPHY_API_KEY' || GIPHY_API_KEY === 'your_giphy_api_key_here') {
+            console.warn('GIPHY API key not configured, using placeholder GIFs');
             // Use placeholder GIFs if no API key
             setGifs([
                 { id: '1', url: 'https://media.giphy.com/media/xT9IgG50Fb7Mi0prBC/giphy.gif' },
@@ -64,12 +65,17 @@ const EmojiGifPicker = ({ onEmojiSelect, onGifSelect, onClose }) => {
                 `https://api.giphy.com/v1/gifs/trending?api_key=${GIPHY_API_KEY}&limit=20&rating=g`
             );
             const data = await response.json();
-            setGifs(
-                data.data.map((gif) => ({
-                    id: gif.id,
-                    url: gif.images.fixed_height.url,
-                }))
-            );
+            
+            if (data.data && data.data.length > 0) {
+                setGifs(
+                    data.data.map((gif) => ({
+                        id: gif.id,
+                        url: gif.images.fixed_height.url,
+                    }))
+                );
+            } else {
+                console.error('No GIFs returned from GIPHY API');
+            }
         } catch (error) {
             console.error('Failed to fetch GIFs:', error);
         } finally {
