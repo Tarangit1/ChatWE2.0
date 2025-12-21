@@ -294,6 +294,7 @@ const CreateChatroomModal = ({ onClose, onCreate }) => {
     const [roomId, setRoomId] = useState(null);
     const [copied, setCopied] = useState(false);
     const [copiedId, setCopiedId] = useState(false);
+    const [isCreating, setIsCreating] = useState(false);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -301,6 +302,10 @@ const CreateChatroomModal = ({ onClose, onCreate }) => {
             alert('Please enter a chatroom name');
             return;
         }
+        
+        // Prevent double submission
+        if (isCreating) return;
+        setIsCreating(true);
 
         try {
             const response = await fetch(`${import.meta.env.VITE_API_URL}/api/chatrooms/create`, {
@@ -329,6 +334,7 @@ const CreateChatroomModal = ({ onClose, onCreate }) => {
         } catch (error) {
             console.error('Error creating chatroom:', error);
             alert(error.message || 'Failed to create chatroom');
+            setIsCreating(false);
         }
     };
 
@@ -391,11 +397,11 @@ const CreateChatroomModal = ({ onClose, onCreate }) => {
                                 </div>
                             )}
                             <div className="modal-actions">
-                                <button type="button" onClick={onClose} className="btn-secondary">
+                                <button type="button" onClick={onClose} className="btn-secondary" disabled={isCreating}>
                                     Cancel
                                 </button>
-                                <button type="submit" className="btn-primary">
-                                    Create
+                                <button type="submit" className="btn-primary" disabled={isCreating}>
+                                    {isCreating ? 'Creating...' : 'Create'}
                                 </button>
                             </div>
                         </form>
