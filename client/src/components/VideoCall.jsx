@@ -21,6 +21,8 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
     const remoteVideoRef = useRef(null);
     const peerConnectionRef = useRef(null);
     const localStreamRef = useRef(null);
+    const pendingIceCandidates = useRef([]);
+    const remoteDescriptionSet = useRef(false);
 
     const iceServers = {
         iceServers: [
@@ -109,9 +111,22 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
 
             // Handle incoming tracks
             pc.ontrack = (event) => {
-                console.log('Received remote track:', event.track.kind);
-                if (remoteVideoRef.current && event.streams[0]) {
-                    remoteVideoRef.current.srcObject = event.streams[0];
+                console.log('Received remote track:', event.track.kind, event.streams);
+                if (remoteVideoRef.current) {
+                    // Use the first stream from the event
+                    if (event.streams && event.streams[0]) {
+                        remoteVideoRef.current.srcObject = event.streams[0];
+                    } else {
+                        // Fallback: create a new MediaStream with the track
+                        let stream = remoteVideoRef.current.srcObject;
+                        if (!stream) {
+                            stream = new MediaStream();
+                            remoteVideoRef.current.srcObject = stream;
+                        }
+                        stream.addTrack(event.track);
+                    }
+                    // Ensure video plays
+                    remoteVideoRef.current.play().catch(e => console.log('Autoplay prevented:', e));
                 }
                 setConnectionStatus('connected');
             };
@@ -150,6 +165,15 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
                 // Handle incoming offer
                 console.log('Setting remote description from incoming offer');
                 await pc.setRemoteDescription(new RTCSessionDescription(incomingOffer));
+                remoteDescriptionSet.current = true;
+                
+                // Process any pending ICE candidates
+                while (pendingIceCandidates.current.length > 0) {
+                    const candidate = pendingIceCandidates.current.shift();
+                    await pc.addIceCandidate(new RTCIceCandidate(candidate));
+                    console.log('Added pending ICE candidate');
+                }
+                
                 const answer = await pc.createAnswer();
                 await pc.setLocalDescription(answer);
                 console.log('Created answer, sending to:', user._id);
@@ -184,6 +208,14 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
         try {
             if (peerConnectionRef.current) {
                 await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(answer));
+                remoteDescriptionSet.current = true;
+                
+                // Process any pending ICE candidates
+                while (pendingIceCandidates.current.length > 0) {
+                    const candidate = pendingIceCandidates.current.shift();
+                    await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+                    console.log('Added pending ICE candidate');
+                }
             } else {
                 console.error('No peer connection when answer received');
             }
@@ -196,7 +228,13 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
         console.log('Received ICE candidate');
         try {
             if (peerConnectionRef.current && candidate) {
-                await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+                // If remote description is not set yet, queue the candidate
+                if (!remoteDescriptionSet.current) {
+                    console.log('Queueing ICE candidate (remote description not set yet)');
+                    pendingIceCandidates.current.push(candidate);
+                } else {
+                    await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+                }
             } else {
                 console.error('No peer connection for ICE candidate');
             }
@@ -223,6 +261,8 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
             peerConnectionRef.current.close();
             peerConnectionRef.current = null;
         }
+        pendingIceCandidates.current = [];
+        remoteDescriptionSet.current = false;
     };
 
     const toggleMute = () => {
@@ -277,14 +317,21 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
                 <div className="video-streams">
                     {/* Remote Video */}
                     <div className="video-stream">
-                        {connectionStatus === 'connected' && callType === 'video' ? (
-                            <video
-                                ref={remoteVideoRef}
-                                autoPlay
-                                playsInline
-                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                            />
-                        ) : (
+                        {/* Hidden audio/video element for remote stream - always present */}
+                        <video
+                            ref={remoteVideoRef}
+                            autoPlay
+                            playsInline
+                            style={{
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'cover',
+                                display: connectionStatus === 'connected' && callType === 'video' ? 'block' : 'none'
+                            }}
+                        />
+                        
+                        {/* Placeholder shown when video is not visible */}
+                        {!(connectionStatus === 'connected' && callType === 'video') && (
                             <div className="video-placeholder">
                                 <img
                                     src={user.avatar || '/default-avatar.png'}
