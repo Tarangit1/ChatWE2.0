@@ -29,7 +29,10 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' },
             { urls: 'stun:stun2.l.google.com:19302' },
-        ]
+            { urls: 'stun:stun3.l.google.com:19302' },
+            { urls: 'stun:stun4.l.google.com:19302' },
+        ],
+        iceCandidatePoolSize: 10
     };
 
     useEffect(() => {
@@ -39,28 +42,37 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
             return;
         }
 
+        // Reset state for new call
+        pendingIceCandidates.current = [];
+        remoteDescriptionSet.current = false;
+        
         startCall();
 
         return () => {
             cleanup();
         };
-    }, [socket]);
+    }, []); // Run only once on mount
 
     useEffect(() => {
         if (socket) {
-            socket.on('call:answered', handleCallAnswered);
-            socket.on('call:ice-candidate', handleIceCandidate);
-            socket.on('call:ended', handleCallEnded);
-            socket.on('call:rejected', handleCallRejected);
+            const onCallAnswered = (data) => handleCallAnswered(data);
+            const onIceCandidate = (data) => handleIceCandidate(data);
+            const onCallEnded = () => handleCallEnded();
+            const onCallRejected = () => handleCallRejected();
+
+            socket.on('call:answered', onCallAnswered);
+            socket.on('call:ice-candidate', onIceCandidate);
+            socket.on('call:ended', onCallEnded);
+            socket.on('call:rejected', onCallRejected);
 
             return () => {
-                socket.off('call:answered', handleCallAnswered);
-                socket.off('call:ice-candidate', handleIceCandidate);
-                socket.off('call:ended', handleCallEnded);
-                socket.off('call:rejected', handleCallRejected);
+                socket.off('call:answered', onCallAnswered);
+                socket.off('call:ice-candidate', onIceCandidate);
+                socket.off('call:ended', onCallEnded);
+                socket.off('call:rejected', onCallRejected);
             };
         }
-    }, [socket]);
+    }, [socket, user]);
 
     const startCall = async () => {
         try {
@@ -144,13 +156,32 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
                 console.log('Connection state:', pc.connectionState);
                 if (pc.connectionState === 'connected') {
                     setConnectionStatus('connected');
-                } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+                } else if (pc.connectionState === 'failed') {
                     setConnectionStatus('error');
+                    setError('Connection failed. Please try again.');
+                } else if (pc.connectionState === 'disconnected') {
+                    setConnectionStatus('connecting');
+                    // Give it time to reconnect
+                    setTimeout(() => {
+                        if (peerConnectionRef.current?.connectionState === 'disconnected') {
+                            setConnectionStatus('error');
+                        }
+                    }, 5000);
                 }
             };
 
             pc.oniceconnectionstatechange = () => {
                 console.log('ICE connection state:', pc.iceConnectionState);
+                if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+                    setConnectionStatus('connected');
+                } else if (pc.iceConnectionState === 'failed') {
+                    setConnectionStatus('error');
+                    setError('ICE connection failed. Network may be blocking the call.');
+                }
+            };
+
+            pc.onicegatheringstatechange = () => {
+                console.log('ICE gathering state:', pc.iceGatheringState);
             };
 
             const isInitiator = !incomingOffer;

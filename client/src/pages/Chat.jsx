@@ -156,15 +156,21 @@ const Chat = () => {
     const handleEndCall = () => {
         setInCall(false);
         setCallType(null);
+        setCallOffer(null);
     };
 
     const handleAnswerCall = () => {
         setSelectedUser(incomingCall);
         setInCall(true);
         setIncomingCall(null);
+        // Keep callOffer - it's needed for the VideoCall component
     };
 
     const handleRejectCall = () => {
+        // Notify the caller that the call was rejected
+        if (socket && incomingCall) {
+            socket.emit('call:reject', { to: incomingCall._id });
+        }
         setIncomingCall(null);
         setCallOffer(null);
         setCallType(null);
