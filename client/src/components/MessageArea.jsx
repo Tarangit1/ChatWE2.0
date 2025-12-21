@@ -259,7 +259,12 @@ const MessageArea = ({ selectedUser, messages, currentUser, onStartCall, onBack 
         }, {});
 
         return (
-            <div key={message._id} className={`message-group ${isSent ? 'sent' : ''}`}>
+            <div 
+                key={message._id} 
+                className={`message-group ${isSent ? 'sent' : ''}`}
+                onDoubleClick={() => handleReply(message)}
+                style={{ cursor: 'pointer' }}
+            >
                 {!isSent && (
                     <img
                         src={message.sender.avatar || '/default-avatar.png'}
