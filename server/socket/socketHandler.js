@@ -222,9 +222,6 @@ const socketHandler = (io) => {
 
                 // Broadcast to all chatroom members (including sender)
                 io.to(`chatroom:${chatroomId}`).emit('chatroom:message', message);
-                
-                // Also send to sender to ensure they get it immediately
-                socket.emit('chatroom:message', message);
 
                 console.log(`Message sent to chatroom ${chatroomId} by ${socket.userId}`);
             } catch (error) {
