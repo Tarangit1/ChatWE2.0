@@ -53,10 +53,12 @@ app.use(
         secret: process.env.SESSION_SECRET,
         resave: false,
         saveUninitialized: false,
+        proxy: true, // Trust proxy for production
         cookie: {
             maxAge: 24 * 60 * 60 * 1000, // 24 hours
             secure: process.env.NODE_ENV === 'production',
             sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+            httpOnly: true,
         },
     })
 );
