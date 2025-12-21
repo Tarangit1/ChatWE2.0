@@ -46,10 +46,14 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
 
     const startCall = async () => {
         try {
+            console.log('Starting call, type:', callType, 'isInitiator:', !incomingOffer);
+            
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: callType === 'video',
                 audio: true,
             });
+
+            console.log('Got media stream:', stream.getTracks().map(t => t.kind));
 
             localStreamRef.current = stream;
             if (localVideoRef.current) {
@@ -78,6 +82,7 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
             });
 
             peer.on('signal', (data) => {
+                console.log('Signal data:', data.type, 'to user:', user._id);
                 if (data.type === 'offer') {
                     initiateCall(user._id, data, callType);
                 } else if (data.type === 'answer') {
@@ -88,6 +93,7 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
             });
 
             peer.on('stream', (remoteStream) => {
+                console.log('Received remote stream:', remoteStream);
                 if (remoteVideoRef.current) {
                     remoteVideoRef.current.srcObject = remoteStream;
                 }
@@ -95,15 +101,18 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
             });
 
             peer.on('connect', () => {
+                console.log('Peer connected!');
                 setConnectionStatus('connected');
             });
 
             peer.on('error', (err) => {
                 console.error('Peer error:', err);
                 setConnectionStatus('error');
+                alert('Call connection error: ' + err.message);
             });
 
             peer.on('close', () => {
+                console.log('Peer closed');
                 setConnectionStatus('ended');
             });
 
@@ -111,23 +120,31 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
 
             // If we received an offer, signal it to the peer
             if (incomingOffer) {
+                console.log('Signaling incoming offer to peer');
                 peer.signal(incomingOffer);
             }
         } catch (error) {
             console.error('Failed to start call:', error);
             setConnectionStatus('error');
+            alert('Failed to access camera/microphone: ' + error.message);
         }
     };
 
     const handleCallAnswered = ({ answer }) => {
+        console.log('Received call answer');
         if (peerRef.current) {
             peerRef.current.signal(answer);
+        } else {
+            console.error('No peer reference when answer received');
         }
     };
 
     const handleIceCandidate = ({ candidate }) => {
+        console.log('Received ICE candidate');
         if (peerRef.current && candidate) {
             peerRef.current.signal(candidate);
+        } else {
+            console.error('No peer reference for ICE candidate');
         }
     };
 
