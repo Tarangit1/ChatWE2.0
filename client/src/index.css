@@ -1282,26 +1282,42 @@ input, textarea {
 @media (max-width: 1024px) {
   .chat-layout {
     grid-template-columns: 1fr;
+    position: relative;
+    overflow: hidden;
   }
 
   .sidebar {
-    position: fixed;
-    left: -100%;
+    position: absolute;
+    left: 0;
     top: 0;
     bottom: 0;
-    width: 280px;
-    max-width: 80vw;
-    z-index: 1000;
-    transition: left var(--transition-normal);
-    box-shadow: var(--shadow-xl);
+    width: 100%;
+    max-width: 100%;
+    z-index: 10;
+    transition: transform var(--transition-normal);
+    transform: translateX(0);
   }
 
-  .sidebar.open {
-    left: 0;
+  /* Hide sidebar when user is selected on mobile */
+  .sidebar.has-selection {
+    transform: translateX(-100%);
+    pointer-events: none;
   }
 
   .chat-main {
     width: 100%;
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    transform: translateX(100%);
+    transition: transform var(--transition-normal);
+  }
+
+  /* Show chat when user is selected */
+  .chat-main.has-selection {
+    transform: translateX(0);
   }
 }
 

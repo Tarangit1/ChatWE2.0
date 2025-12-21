@@ -161,7 +161,7 @@ const Chat = () => {
     return (
         <div className="chat-layout">
             {/* Sidebar with Chat List */}
-            <aside className="sidebar">
+            <aside className={`sidebar ${selectedUser ? 'has-selection' : ''}`}>
                 <header className="sidebar-header">
                     <div className="sidebar-logo">
                         <img src="https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/chatbetter.png" alt="ChatWe" />
@@ -200,7 +200,7 @@ const Chat = () => {
             </aside>
 
             {/* Main Chat Area */}
-            <main className="chat-main">
+            <main className={`chat-main ${selectedUser ? 'has-selection' : ''}`}>
                 {selectedUser ? (
                     <MessageArea
                         selectedUser={selectedUser}
