@@ -2,9 +2,8 @@ services:
   # Backend Web Service
   - type: web
     name: mern-chat-backend
-    env: node
+    runtime: node
     region: oregon
-    plan: free
     buildCommand: cd server && npm install
     startCommand: cd server && npm start
     envVars:
@@ -26,8 +25,7 @@ services:
   # Frontend Static Site
   - type: web
     name: mern-chat-frontend
-    env: static
-    plan: free
+    runtime: static
     buildCommand: cd client && npm install && npm run build
     staticPublishPath: ./client/dist
     envVars:
