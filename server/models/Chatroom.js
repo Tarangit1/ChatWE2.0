@@ -25,6 +25,11 @@ const chatroomSchema = new mongoose.Schema(
             type: String,
             // Hashed key for private rooms
         },
+        plainAccessKey: {
+            type: String,
+            // Plain text key stored separately (only shown to admins)
+            select: false, // Don't include in queries by default
+        },
         members: [
             {
                 type: mongoose.Schema.Types.ObjectId,

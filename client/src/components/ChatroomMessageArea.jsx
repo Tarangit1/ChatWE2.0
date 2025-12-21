@@ -12,6 +12,7 @@ import {
     BsImage,
     BsPlayCircle,
     BsChatDots,
+    BsKey,
 } from 'react-icons/bs';
 import axios from 'axios';
 import EmojiGifPicker from './EmojiGifPicker';
@@ -24,6 +25,8 @@ const ChatroomMessageArea = ({ chatroom, onBack }) => {
     const [showFileUpload, setShowFileUpload] = useState(false);
     const [selectedFile, setSelectedFile] = useState(null);
     const [typingUsers, setTypingUsers] = useState(new Set());
+    const [showKeyModal, setShowKeyModal] = useState(false);
+    const [accessKeyData, setAccessKeyData] = useState(null);
     const messagesEndRef = useRef(null);
     const typingTimeoutRef = useRef(null);
     const inputRef = useRef(null);
@@ -236,6 +239,37 @@ const ChatroomMessageArea = ({ chatroom, onBack }) => {
         return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
     };
 
+    const fetchAccessKey = async () => {
+        try {
+            const response = await axios.get(
+                `${API_URL}/api/chatrooms/${chatroom._id}/access-key`,
+                { withCredentials: true }
+            );
+            setAccessKeyData(response.data);
+            setShowKeyModal(true);
+        } catch (error) {
+            console.error('Error fetching access key:', error);
+            alert(error.response?.data?.message || 'Failed to fetch access key');
+        }
+    };
+
+    const handleCopyKey = () => {
+        if (accessKeyData?.accessKey) {
+            navigator.clipboard.writeText(accessKeyData.accessKey);
+            alert('Access key copied to clipboard!');
+        }
+    };
+
+    const handleCopyRoomId = () => {
+        if (chatroom?._id) {
+            navigator.clipboard.writeText(chatroom._id);
+            alert('Room ID copied to clipboard!');
+        }
+    };
+
+    const isAdmin = chatroom?.admins?.some(admin => admin._id === user?._id || admin === user?._id);
+    const isCreator = chatroom?.creator?._id === user?._id || chatroom?.creator === user?._id;
+
     const renderMessage = (message, index) => {
         const isSentByMe = message.sender._id === user._id;
         const showDate =
@@ -361,6 +395,15 @@ const ChatroomMessageArea = ({ chatroom, onBack }) => {
                         </div>
                     </div>
                 </div>
+                {chatroom.isPrivate && (isAdmin || isCreator) && (
+                    <button 
+                        className="show-key-btn" 
+                        onClick={fetchAccessKey}
+                        title="View Access Key"
+                    >
+                        <BsKey />
+                    </button>
+                )}
             </header>
 
             {/* Messages Area */}
@@ -451,6 +494,50 @@ const ChatroomMessageArea = ({ chatroom, onBack }) => {
                     </button>
                 </div>
             </div>
+
+            {/* Access Key Modal */}
+            {showKeyModal && accessKeyData && (
+                <div className="modal-overlay" onClick={() => setShowKeyModal(false)}>
+                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                        <h2>🔒 Private Room Access</h2>
+                        <p className="key-info">Share these with people you want to invite:</p>
+                        
+                        <div className="form-group">
+                            <label>Room ID</label>
+                            <div className="key-display-box">
+                                <code className="generated-key">{accessKeyData.roomId}</code>
+                                <button 
+                                    onClick={handleCopyRoomId} 
+                                    className="copy-key-btn"
+                                    title="Copy to clipboard"
+                                >
+                                    📋 Copy
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="form-group">
+                            <label>Access Key</label>
+                            <div className="key-display-box">
+                                <code className="generated-key">{accessKeyData.accessKey}</code>
+                                <button 
+                                    onClick={handleCopyKey} 
+                                    className="copy-key-btn"
+                                    title="Copy to clipboard"
+                                >
+                                    📋 Copy
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="modal-actions">
+                            <button onClick={() => setShowKeyModal(false)} className="btn-primary">
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </>
     );
 };

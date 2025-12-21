@@ -55,6 +55,7 @@ router.post('/create', async (req, res) => {
             creator: req.user._id,
             isPrivate: isPrivate || false,
             accessKey: isPrivate ? accessKey : null,
+            plainAccessKey: isPrivate ? accessKey : null, // Store plain key too
             members: [req.user._id],
             admins: [req.user._id],
             avatar: avatar || '',
@@ -258,4 +259,40 @@ router.delete('/:id', async (req, res) => {
     }
 });
 
+// Get chatroom access key (only for admins/creators)
+router.get('/:id/access-key', async (req, res) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ message: 'Not authenticated' });
+        }
+
+        const chatroom = await Chatroom.findById(req.params.id).select('+plainAccessKey');
+
+        if (!chatroom) {
+            return res.status(404).json({ message: 'Chatroom not found' });
+        }
+
+        // Check if user is admin or creator
+        const isAdmin = chatroom.admins.some(adminId => adminId.toString() === req.user._id.toString());
+        const isCreator = chatroom.creator.toString() === req.user._id.toString();
+
+        if (!isAdmin && !isCreator) {
+            return res.status(403).json({ message: 'Only admins can view the access key' });
+        }
+
+        if (!chatroom.isPrivate || !chatroom.plainAccessKey) {
+            return res.status(400).json({ message: 'This is not a private chatroom' });
+        }
+
+        res.json({ 
+            accessKey: chatroom.plainAccessKey,
+            roomId: chatroom._id 
+        });
+    } catch (error) {
+        console.error('Error fetching access key:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
 export default router;
+
