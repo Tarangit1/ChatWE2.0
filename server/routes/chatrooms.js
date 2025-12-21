@@ -152,6 +152,67 @@ router.post('/:id/join', async (req, res) => {
     }
 });
 
+// Join chatroom by access key only (finds the room automatically)
+router.post('/join-by-key', async (req, res) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ message: 'Not authenticated' });
+        }
+
+        const { accessKey } = req.body;
+
+        if (!accessKey || accessKey.trim().length === 0) {
+            return res.status(400).json({ message: 'Access key is required' });
+        }
+
+        // Find chatroom with matching plainAccessKey
+        const chatroom = await Chatroom.findOne({ 
+            plainAccessKey: accessKey.trim().toUpperCase(),
+            isPrivate: true 
+        }).select('+plainAccessKey');
+
+        if (!chatroom) {
+            return res.status(404).json({ message: 'No private room found with this access key' });
+        }
+
+        // Check if already a member
+        if (chatroom.members.some(m => m.toString() === req.user._id.toString())) {
+            await chatroom.populate('creator', 'name avatar');
+            await chatroom.populate('members', 'name avatar');
+            const chatroomData = chatroom.toObject();
+            delete chatroomData.accessKey;
+            delete chatroomData.plainAccessKey;
+            return res.json(chatroomData);
+        }
+
+        // Check max members
+        if (chatroom.members.length >= chatroom.maxMembers) {
+            return res.status(400).json({ message: 'Chatroom is full' });
+        }
+
+        // Add user to members
+        chatroom.members.push(req.user._id);
+        await chatroom.save();
+
+        await chatroom.populate('creator', 'name avatar');
+        await chatroom.populate('members', 'name avatar');
+
+        const chatroomData = chatroom.toObject();
+        delete chatroomData.accessKey;
+        delete chatroomData.plainAccessKey;
+
+        // Emit socket event
+        if (req.io) {
+            req.io.emit('chatroom:updated', chatroomData);
+        }
+
+        res.json(chatroomData);
+    } catch (error) {
+        console.error('Error joining chatroom by key:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
 // Leave a chatroom
 router.post('/:id/leave', async (req, res) => {
     try {

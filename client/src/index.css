@@ -1794,6 +1794,68 @@ input, textarea {
   box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
 }
 
+/* Join by Key Input */
+.join-key-container {
+  padding: var(--spacing-md);
+  background: var(--bg-darker);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.join-key-form {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+}
+
+.join-key-input {
+  flex: 1;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-card);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-family: 'Courier New', monospace;
+  letter-spacing: 1px;
+  transition: all var(--transition-fast);
+}
+
+.join-key-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  background: var(--bg-card-hover);
+}
+
+.join-key-input::placeholder {
+  font-family: inherit;
+  letter-spacing: normal;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.join-key-btn {
+  padding: var(--spacing-sm) var(--spacing-lg);
+  background: var(--primary-gradient);
+  color: var(--text-primary);
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.join-key-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.join-key-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .chatrooms-container {
   flex: 1;
   overflow-y: auto;

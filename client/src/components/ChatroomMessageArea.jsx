@@ -499,22 +499,8 @@ const ChatroomMessageArea = ({ chatroom, onBack }) => {
             {showKeyModal && accessKeyData && (
                 <div className="modal-overlay" onClick={() => setShowKeyModal(false)}>
                     <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-                        <h2>🔒 Private Room Access</h2>
-                        <p className="key-info">Share these with people you want to invite:</p>
-                        
-                        <div className="form-group">
-                            <label>Room ID</label>
-                            <div className="key-display-box">
-                                <code className="generated-key">{accessKeyData.roomId}</code>
-                                <button 
-                                    onClick={handleCopyRoomId} 
-                                    className="copy-key-btn"
-                                    title="Copy to clipboard"
-                                >
-                                    📋 Copy
-                                </button>
-                            </div>
-                        </div>
+                        <h2>🔒 Private Room Access Key</h2>
+                        <p className="key-info">Share this with people you want to invite:</p>
 
                         <div className="form-group">
                             <label>Access Key</label>
@@ -528,6 +514,7 @@ const ChatroomMessageArea = ({ chatroom, onBack }) => {
                                     📋 Copy
                                 </button>
                             </div>
+                            <small>Others can paste this key in the input field at the top of chatrooms list</small>
                         </div>
 
                         <div className="modal-actions">
@@ -543,3 +530,4 @@ const ChatroomMessageArea = ({ chatroom, onBack }) => {
 };
 
 export default ChatroomMessageArea;
+

@@ -7,8 +7,9 @@ const ChatroomList = ({ onSelectChatroom, selectedChatroomId }) => {
     const [chatrooms, setChatrooms] = useState([]);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [showJoinModal, setShowJoinModal] = useState(false);
-    const [showJoinByIdModal, setShowJoinByIdModal] = useState(false);
     const [selectedRoom, setSelectedRoom] = useState(null);
+    const [joinKey, setJoinKey] = useState('');
+    const [isJoining, setIsJoining] = useState(false);
     const { socket, user } = useSocket();
 
     useEffect(() => {
@@ -130,26 +131,71 @@ const ChatroomList = ({ onSelectChatroom, selectedChatroomId }) => {
         }
     };
 
+    const handleJoinByKey = async (e) => {
+        e.preventDefault();
+        if (!joinKey.trim()) {
+            return;
+        }
+
+        setIsJoining(true);
+        try {
+            const response = await axios.post(
+                `${import.meta.env.VITE_API_URL}/api/chatrooms/join-by-key`,
+                { accessKey: joinKey.trim() },
+                { withCredentials: true }
+            );
+            
+            // Add to chatrooms if not already there
+            setChatrooms(prev => {
+                if (prev.some(r => r._id === response.data._id)) {
+                    return prev;
+                }
+                return [response.data, ...prev];
+            });
+            
+            setJoinKey('');
+            alert('Successfully joined the private room!');
+        } catch (error) {
+            console.error('Error joining by key:', error);
+            alert(error.response?.data?.message || 'Failed to join room');
+        } finally {
+            setIsJoining(false);
+        }
+    };
+
     return (
         <div className="chatroom-list">
             <div className="chatroom-list-header">
                 <h2>Chatrooms</h2>
-                <div className="header-actions">
+                <button 
+                    onClick={() => setShowCreateModal(true)} 
+                    className="create-room-btn" 
+                    title="Create Chatroom"
+                >
+                    <BsPlusCircle />
+                </button>
+            </div>
+
+            {/* Join by Access Key Input */}
+            <div className="join-key-container">
+                <form onSubmit={handleJoinByKey} className="join-key-form">
+                    <input
+                        type="text"
+                        value={joinKey}
+                        onChange={(e) => setJoinKey(e.target.value.toUpperCase())}
+                        placeholder="Enter access key to join private room"
+                        className="join-key-input"
+                        disabled={isJoining}
+                    />
                     <button 
-                        onClick={() => setShowJoinByIdModal(true)} 
-                        className="join-room-btn" 
-                        title="Join Private Room"
+                        type="submit" 
+                        className="join-key-btn"
+                        disabled={!joinKey.trim() || isJoining}
+                        title="Join Room"
                     >
-                        <BsLock />
+                        {isJoining ? '...' : 'Join'}
                     </button>
-                    <button 
-                        onClick={() => setShowCreateModal(true)} 
-                        className="create-room-btn" 
-                        title="Create Chatroom"
-                    >
-                        <BsPlusCircle />
-                    </button>
-                </div>
+                </form>
             </div>
 
             <div className="chatrooms-container">
@@ -231,13 +277,6 @@ const ChatroomList = ({ onSelectChatroom, selectedChatroomId }) => {
                         setShowJoinModal(false);
                         setSelectedRoom(null);
                     }}
-                    onJoin={handleJoinChatroom}
-                />
-            )}
-
-            {showJoinByIdModal && (
-                <JoinByIdModal
-                    onClose={() => setShowJoinByIdModal(false)}
                     onJoin={handleJoinChatroom}
                 />
             )}
@@ -365,21 +404,7 @@ const CreateChatroomModal = ({ onClose, onCreate }) => {
                     <>
                         <h2>✅ Private Room Created!</h2>
                         <div className="key-display-section">
-                            <p className="key-info">Share both the Room ID and Access Key with people you want to invite:</p>
-                            
-                            <div className="form-group">
-                                <label>Room ID</label>
-                                <div className="key-display-box">
-                                    <code className="generated-key">{roomId}</code>
-                                    <button 
-                                        onClick={handleCopyId} 
-                                        className="copy-key-btn"
-                                        title="Copy to clipboard"
-                                    >
-                                        {copiedId ? '✓ Copied!' : '📋 Copy'}
-                                    </button>
-                                </div>
-                            </div>
+                            <p className="key-info">Share this Access Key with people you want to invite:</p>
 
                             <div className="form-group">
                                 <label>Access Key</label>
@@ -395,7 +420,7 @@ const CreateChatroomModal = ({ onClose, onCreate }) => {
                                 </div>
                             </div>
 
-                            <p className="key-warning">💡 You can view these anytime by clicking the key icon in the chatroom.</p>
+                            <p className="key-warning">💡 You can view this key anytime by clicking the key icon in the chatroom.</p>
                         </div>
                         <div className="modal-actions">
                             <button onClick={handleFinish} className="btn-primary">
@@ -465,111 +490,6 @@ const JoinChatroomModal = ({ room, onClose, onJoin }) => {
                         </button>
                         <button type="submit" className="btn-primary">
                             Join Room
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    );
-};
-
-const JoinByIdModal = ({ onClose, onJoin }) => {
-    const [roomId, setRoomId] = useState('');
-    const [accessKey, setAccessKey] = useState('');
-    const [loading, setLoading] = useState(false);
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        if (!roomId.trim()) {
-            alert('Please enter the room ID');
-            return;
-        }
-        if (!accessKey.trim()) {
-            alert('Please enter the access key');
-            return;
-        }
-
-        setLoading(true);
-        try {
-            await onJoin(roomId.trim(), accessKey.trim());
-            onClose();
-        } catch (error) {
-            alert(error.response?.data?.message || 'Failed to join room');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handlePaste = async (field) => {
-        try {
-            const text = await navigator.clipboard.readText();
-            if (field === 'roomId') {
-                setRoomId(text.trim());
-            } else {
-                setAccessKey(text.trim());
-            }
-        } catch (err) {
-            console.error('Failed to read clipboard:', err);
-        }
-    };
-
-    return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-                <h2>🔒 Join Private Room</h2>
-                <p className="join-info">Enter the Room ID and Access Key shared by the room creator</p>
-                <form onSubmit={handleSubmit}>
-                    <div className="form-group">
-                        <label>Room ID *</label>
-                        <div className="key-input-wrapper">
-                            <input
-                                type="text"
-                                value={roomId}
-                                onChange={(e) => setRoomId(e.target.value)}
-                                placeholder="Paste the room ID here"
-                                required
-                                autoFocus
-                                className="key-input"
-                            />
-                            <button 
-                                type="button" 
-                                onClick={() => handlePaste('roomId')} 
-                                className="paste-btn"
-                                title="Paste from clipboard"
-                            >
-                                📋 Paste
-                            </button>
-                        </div>
-                        <small>The unique identifier for the private room</small>
-                    </div>
-                    <div className="form-group">
-                        <label>Access Key *</label>
-                        <div className="key-input-wrapper">
-                            <input
-                                type="text"
-                                value={accessKey}
-                                onChange={(e) => setAccessKey(e.target.value)}
-                                placeholder="Paste the access key here"
-                                required
-                                className="key-input"
-                            />
-                            <button 
-                                type="button" 
-                                onClick={() => handlePaste('accessKey')} 
-                                className="paste-btn"
-                                title="Paste from clipboard"
-                            >
-                                📋 Paste
-                            </button>
-                        </div>
-                        <small>The secret key to access this private room</small>
-                    </div>
-                    <div className="modal-actions">
-                        <button type="button" onClick={onClose} className="btn-secondary" disabled={loading}>
-                            Cancel
-                        </button>
-                        <button type="submit" className="btn-primary" disabled={loading}>
-                            {loading ? 'Joining...' : 'Join Room'}
                         </button>
                     </div>
                 </form>
