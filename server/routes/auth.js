@@ -16,7 +16,14 @@ router.get(
         failureRedirect: `${process.env.CLIENT_URL}/login?error=auth_failed`,
     }),
     (req, res) => {
-        res.redirect(process.env.CLIENT_URL);
+        // Set session and redirect
+        req.session.save((err) => {
+            if (err) {
+                console.error('Session save error:', err);
+                return res.redirect(`${process.env.CLIENT_URL}/login?error=session_failed`);
+            }
+            res.redirect(process.env.CLIENT_URL);
+        });
     }
 );
 
