@@ -64,6 +64,17 @@ router.post('/create', async (req, res) => {
         const chatroomData = chatroom.toObject();
         delete chatroomData.accessKey;
 
+        // Emit socket event for real-time updates
+        if (req.io) {
+            // Broadcast to all users if public, or just creator if private
+            if (!isPrivate) {
+                req.io.emit('chatroom:created', chatroomData);
+            } else {
+                // Only creator gets notified for private rooms initially
+                req.io.to(req.user._id.toString()).emit('chatroom:created', chatroomData);
+            }
+        }
+
         res.status(201).json(chatroomData);
     } catch (error) {
         console.error('Error creating chatroom:', error);
@@ -116,6 +127,13 @@ router.post('/:id/join', async (req, res) => {
 
         const chatroomData = chatroom.toObject();
         delete chatroomData.accessKey;
+
+        // Emit socket event - notify all members of the updated chatroom
+        if (req.io) {
+            chatroom.members.forEach(memberId => {
+                req.io.emit('chatroom:updated', chatroomData);
+            });
+        }
 
         res.json(chatroomData);
     } catch (error) {
@@ -170,8 +188,18 @@ router.get('/:id/messages', async (req, res) => {
         }
 
         // Check if user is a member
-        if (!chatroom.members.includes(req.user._id)) {
-            return res.status(403).json({ message: 'Not a member of this chatroom' });
+        const isMember = chatroom.members.some(
+            memberId => memberId.toString() === req.user._id.toString()
+        );
+
+        // For public rooms, auto-add user if not already a member
+        if (!isMember && !chatroom.isPrivate) {
+            chatroom.members.push(req.user._id);
+            await chatroom.save();
+            console.log(`Auto-added user ${req.user._id} to public chatroom ${req.params.id}`);
+        } else if (!isMember && chatroom.isPrivate) {
+            // Private rooms require explicit joining
+            return res.status(403).json({ message: 'Not a member of this private chatroom' });
         }
 
         const messages = await ChatroomMessage.find({ chatroom: req.params.id })
@@ -208,6 +236,11 @@ router.delete('/:id', async (req, res) => {
 
         // Delete chatroom
         await chatroom.deleteOne();
+
+        // Emit socket event to all members
+        if (req.io) {
+            req.io.emit('chatroom:deleted', req.params.id);
+        }
 
         res.json({ message: 'Chatroom deleted successfully' });
     } catch (error) {

@@ -72,6 +72,12 @@ app.use(passport.session());
 // Static files for uploads
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// Make io accessible in routes
+app.use((req, res, next) => {
+    req.io = io;
+    next();
+});
+
 // Routes
 app.use('/auth', authRoutes);
 app.use('/api/messages', messageRoutes);

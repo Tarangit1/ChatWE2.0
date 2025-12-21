@@ -8,11 +8,48 @@ const ChatroomList = ({ onSelectChatroom, selectedChatroomId }) => {
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [showJoinModal, setShowJoinModal] = useState(false);
     const [selectedRoom, setSelectedRoom] = useState(null);
-    const { user } = useSocket();
+    const { socket, user } = useSocket();
 
     useEffect(() => {
         fetchChatrooms();
-    }, []);
+
+        // Listen for chatroom updates
+        if (socket) {
+            socket.on('chatroom:created', handleChatroomCreated);
+            socket.on('chatroom:updated', handleChatroomUpdated);
+            socket.on('chatroom:deleted', handleChatroomDeleted);
+
+            return () => {
+                socket.off('chatroom:created', handleChatroomCreated);
+                socket.off('chatroom:updated', handleChatroomUpdated);
+                socket.off('chatroom:deleted', handleChatroomDeleted);
+            };
+        }
+    }, [socket]);
+
+    const handleChatroomCreated = (chatroom) => {
+        // Add new chatroom if it's public or user is a member
+        if (!chatroom.isPrivate || chatroom.members.some(m => m._id === user?._id)) {
+            setChatrooms((prev) => {
+                // Check if already exists
+                if (prev.some(r => r._id === chatroom._id)) return prev;
+                return [chatroom, ...prev];
+            });
+        }
+    };
+
+    const handleChatroomUpdated = (chatroom) => {
+        setChatrooms((prev) =>
+            prev.map((room) => (room._id === chatroom._id ? chatroom : room))
+        );
+    };
+
+    const handleChatroomDeleted = (chatroomId) => {
+        setChatrooms((prev) => prev.filter((room) => room._id !== chatroomId));
+        if (selectedChatroomId === chatroomId) {
+            onSelectChatroom(null);
+        }
+    };
 
     const fetchChatrooms = async () => {
         try {

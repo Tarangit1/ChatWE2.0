@@ -130,7 +130,29 @@ const socketHandler = (io) => {
         socket.on('chatroom:join', async (chatroomId) => {
             try {
                 const chatroom = await Chatroom.findById(chatroomId);
-                if (chatroom && chatroom.members.includes(socket.userId)) {
+                if (!chatroom) {
+                    console.error('Chatroom not found:', chatroomId);
+                    return;
+                }
+
+                // Check if user is a member (convert ObjectId to string for comparison)
+                const isMember = chatroom.members.some(
+                    memberId => memberId.toString() === socket.userId.toString()
+                );
+
+                // For public rooms, auto-add user if not a member
+                if (!isMember && !chatroom.isPrivate) {
+                    chatroom.members.push(socket.userId);
+                    await chatroom.save();
+                    console.log(`Auto-added user ${socket.userId} to public chatroom ${chatroomId}`);
+                }
+
+                // Join the socket room if user is now a member
+                const isNowMember = chatroom.members.some(
+                    memberId => memberId.toString() === socket.userId.toString()
+                );
+
+                if (isNowMember) {
                     socket.join(`chatroom:${chatroomId}`);
                     console.log(`User ${socket.userId} joined chatroom ${chatroomId}`);
                     
@@ -139,6 +161,8 @@ const socketHandler = (io) => {
                         userId: socket.userId,
                         chatroomId,
                     });
+                } else {
+                    console.log(`User ${socket.userId} is not a member of private chatroom ${chatroomId}`);
                 }
             } catch (error) {
                 console.error('Error joining chatroom:', error);
@@ -158,10 +182,26 @@ const socketHandler = (io) => {
             try {
                 const { chatroomId, content, messageType, fileUrl, fileName, fileSize, mimeType } = data;
 
-                // Verify user is a member
+                // Get chatroom
                 const chatroom = await Chatroom.findById(chatroomId);
-                if (!chatroom || !chatroom.members.includes(socket.userId)) {
-                    socket.emit('chatroom:error', { message: 'Not a member of this chatroom' });
+                if (!chatroom) {
+                    socket.emit('chatroom:error', { message: 'Chatroom not found' });
+                    return;
+                }
+
+                // Check if user is a member (convert ObjectId to string for comparison)
+                const isMember = chatroom.members.some(
+                    memberId => memberId.toString() === socket.userId.toString()
+                );
+
+                // For public rooms, auto-add user as member if not already
+                if (!isMember && !chatroom.isPrivate) {
+                    chatroom.members.push(socket.userId);
+                    await chatroom.save();
+                    console.log(`Auto-added user ${socket.userId} to public chatroom ${chatroomId}`);
+                } else if (!isMember && chatroom.isPrivate) {
+                    // Private rooms require explicit joining
+                    socket.emit('chatroom:error', { message: 'Not a member of this private chatroom' });
                     return;
                 }
 
@@ -180,8 +220,13 @@ const socketHandler = (io) => {
                 // Populate sender details
                 await message.populate('sender', 'name avatar');
 
-                // Broadcast to all chatroom members
+                // Broadcast to all chatroom members (including sender)
                 io.to(`chatroom:${chatroomId}`).emit('chatroom:message', message);
+                
+                // Also send to sender to ensure they get it immediately
+                socket.emit('chatroom:message', message);
+
+                console.log(`Message sent to chatroom ${chatroomId} by ${socket.userId}`);
             } catch (error) {
                 console.error('Error sending chatroom message:', error);
                 socket.emit('chatroom:error', { message: error.message });
