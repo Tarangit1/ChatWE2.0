@@ -229,78 +229,132 @@ const CreateChatroomModal = ({ onClose, onCreate }) => {
         name: '',
         description: '',
         isPrivate: false,
-        accessKey: '',
     });
+    const [generatedKey, setGeneratedKey] = useState(null);
+    const [copied, setCopied] = useState(false);
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         if (!formData.name.trim()) {
             alert('Please enter a chatroom name');
             return;
         }
-        if (formData.isPrivate && formData.accessKey.length < 4) {
-            alert('Access key must be at least 4 characters');
-            return;
+
+        try {
+            const response = await fetch(`${import.meta.env.VITE_API_URL}/api/chatrooms/create`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify(formData),
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || 'Failed to create chatroom');
+            }
+
+            const data = await response.json();
+            
+            // If private room, show the generated key
+            if (formData.isPrivate && data.plainAccessKey) {
+                setGeneratedKey(data.plainAccessKey);
+            } else {
+                // Public room, close immediately
+                onCreate(data);
+                onClose();
+            }
+        } catch (error) {
+            console.error('Error creating chatroom:', error);
+            alert(error.message || 'Failed to create chatroom');
         }
-        onCreate(formData);
+    };
+
+    const handleCopyKey = () => {
+        navigator.clipboard.writeText(generatedKey);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
+    const handleFinish = () => {
+        onClose();
+        window.location.reload(); // Refresh to show the new room
     };
 
     return (
-        <div className="modal-overlay" onClick={onClose}>
+        <div className="modal-overlay" onClick={generatedKey ? null : onClose}>
             <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-                <h2>Create Chatroom</h2>
-                <form onSubmit={handleSubmit}>
-                    <div className="form-group">
-                        <label>Chatroom Name *</label>
-                        <input
-                            type="text"
-                            value={formData.name}
-                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                            placeholder="Enter chatroom name"
-                            required
-                        />
-                    </div>
-                    <div className="form-group">
-                        <label>Description</label>
-                        <textarea
-                            value={formData.description}
-                            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                            placeholder="Optional description"
-                            rows="3"
-                        />
-                    </div>
-                    <div className="form-group checkbox-group">
-                        <label>
-                            <input
-                                type="checkbox"
-                                checked={formData.isPrivate}
-                                onChange={(e) => setFormData({ ...formData, isPrivate: e.target.checked })}
-                            />
-                            <BsLock /> Private Chatroom (requires access key)
-                        </label>
-                    </div>
-                    {formData.isPrivate && (
-                        <div className="form-group">
-                            <label>Access Key *</label>
-                            <input
-                                type="password"
-                                value={formData.accessKey}
-                                onChange={(e) => setFormData({ ...formData, accessKey: e.target.value })}
-                                placeholder="Minimum 4 characters"
-                                minLength="4"
-                            />
-                            <small>Share this key with others to let them join</small>
+                {!generatedKey ? (
+                    <>
+                        <h2>Create Chatroom</h2>
+                        <form onSubmit={handleSubmit}>
+                            <div className="form-group">
+                                <label>Chatroom Name *</label>
+                                <input
+                                    type="text"
+                                    value={formData.name}
+                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                    placeholder="Enter chatroom name"
+                                    required
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label>Description</label>
+                                <textarea
+                                    value={formData.description}
+                                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                                    placeholder="Optional description"
+                                    rows="3"
+                                />
+                            </div>
+                            <div className="form-group checkbox-group">
+                                <label>
+                                    <input
+                                        type="checkbox"
+                                        checked={formData.isPrivate}
+                                        onChange={(e) => setFormData({ ...formData, isPrivate: e.target.checked })}
+                                    />
+                                    <BsLock /> Private Chatroom (requires access key to join)
+                                </label>
+                            </div>
+                            {formData.isPrivate && (
+                                <div className="info-message">
+                                    <small>🔑 A secure access key will be automatically generated for your private room</small>
+                                </div>
+                            )}
+                            <div className="modal-actions">
+                                <button type="button" onClick={onClose} className="btn-secondary">
+                                    Cancel
+                                </button>
+                                <button type="submit" className="btn-primary">
+                                    Create
+                                </button>
+                            </div>
+                        </form>
+                    </>
+                ) : (
+                    <>
+                        <h2>✅ Private Room Created!</h2>
+                        <div className="key-display-section">
+                            <p className="key-info">Your private access key has been generated. Share this key with people you want to invite:</p>
+                            <div className="key-display-box">
+                                <code className="generated-key">{generatedKey}</code>
+                                <button 
+                                    onClick={handleCopyKey} 
+                                    className="copy-key-btn"
+                                    title="Copy to clipboard"
+                                >
+                                    {copied ? '✓ Copied!' : '📋 Copy'}
+                                </button>
+                            </div>
+                            <p className="key-warning">⚠️ Save this key now! You won't be able to see it again.</p>
                         </div>
-                    )}
-                    <div className="modal-actions">
-                        <button type="button" onClick={onClose} className="btn-secondary">
-                            Cancel
-                        </button>
-                        <button type="submit" className="btn-primary">
-                            Create
-                        </button>
-                    </div>
-                </form>
+                        <div className="modal-actions">
+                            <button onClick={handleFinish} className="btn-primary">
+                                Got it!
+                            </button>
+                        </div>
+                    </>
+                )}
             </div>
         </div>
     );
@@ -311,31 +365,57 @@ const JoinChatroomModal = ({ room, onClose, onJoin }) => {
 
     const handleSubmit = (e) => {
         e.preventDefault();
+        if (!accessKey.trim()) {
+            alert('Please enter the access key');
+            return;
+        }
         onJoin(room._id, accessKey);
+    };
+
+    const handlePaste = async () => {
+        try {
+            const text = await navigator.clipboard.readText();
+            setAccessKey(text.trim());
+        } catch (err) {
+            console.error('Failed to read clipboard:', err);
+        }
     };
 
     return (
         <div className="modal-overlay" onClick={onClose}>
             <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-                <h2>Join {room.name}</h2>
+                <h2>🔒 Join Private Room</h2>
+                <p className="join-room-name">"{room.name}"</p>
                 <form onSubmit={handleSubmit}>
                     <div className="form-group">
-                        <label>Access Key *</label>
-                        <input
-                            type="password"
-                            value={accessKey}
-                            onChange={(e) => setAccessKey(e.target.value)}
-                            placeholder="Enter access key"
-                            required
-                            autoFocus
-                        />
+                        <label>Enter Access Key</label>
+                        <div className="key-input-wrapper">
+                            <input
+                                type="text"
+                                value={accessKey}
+                                onChange={(e) => setAccessKey(e.target.value)}
+                                placeholder="Paste the access key here"
+                                required
+                                autoFocus
+                                className="key-input"
+                            />
+                            <button 
+                                type="button" 
+                                onClick={handlePaste} 
+                                className="paste-btn"
+                                title="Paste from clipboard"
+                            >
+                                📋 Paste
+                            </button>
+                        </div>
+                        <small>Ask the room creator for the access key</small>
                     </div>
                     <div className="modal-actions">
                         <button type="button" onClick={onClose} className="btn-secondary">
                             Cancel
                         </button>
                         <button type="submit" className="btn-primary">
-                            Join
+                            Join Room
                         </button>
                     </div>
                 </form>

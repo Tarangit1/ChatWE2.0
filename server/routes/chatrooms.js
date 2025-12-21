@@ -36,14 +36,17 @@ router.post('/create', async (req, res) => {
             return res.status(401).json({ message: 'Not authenticated' });
         }
 
-        const { name, description, isPrivate, accessKey, avatar } = req.body;
+        const { name, description, isPrivate, avatar } = req.body;
 
         if (!name || name.trim().length === 0) {
             return res.status(400).json({ message: 'Chatroom name is required' });
         }
 
-        if (isPrivate && (!accessKey || accessKey.length < 4)) {
-            return res.status(400).json({ message: 'Private rooms require an access key of at least 4 characters' });
+        // Generate random access key for private rooms
+        let accessKey = null;
+        if (isPrivate) {
+            // Generate 8-character alphanumeric key
+            accessKey = Math.random().toString(36).substring(2, 10).toUpperCase();
         }
 
         const chatroom = await Chatroom.create({
@@ -60,9 +63,15 @@ router.post('/create', async (req, res) => {
         await chatroom.populate('creator', 'name avatar');
         await chatroom.populate('members', 'name avatar');
 
-        // Don't send the hashed key back
+        // Prepare response data
         const chatroomData = chatroom.toObject();
-        delete chatroomData.accessKey;
+        delete chatroomData.accessKey; // Remove hashed key
+        
+        // Include the plain text key in response for private rooms (only on creation)
+        const responseData = {
+            ...chatroomData,
+            plainAccessKey: isPrivate ? accessKey : null, // Send plain key to creator
+        };
 
         // Emit socket event for real-time updates
         if (req.io) {
@@ -75,7 +84,7 @@ router.post('/create', async (req, res) => {
             }
         }
 
-        res.status(201).json(chatroomData);
+        res.status(201).json(responseData);
     } catch (error) {
         console.error('Error creating chatroom:', error);
         res.status(500).json({ message: 'Server error' });
