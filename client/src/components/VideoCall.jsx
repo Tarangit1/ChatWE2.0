@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSocket } from '../context/SocketContext';
-import SimplePeer from 'simple-peer';
+import Peer from 'simple-peer';
 import {
     BsMicMute,
     BsMic,
@@ -60,6 +60,16 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
                 throw new Error('Call functions not available');
             }
 
+            // Check if WebRTC is supported
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                throw new Error('WebRTC is not supported in your browser. Please use a modern browser like Chrome, Firefox, or Edge.');
+            }
+
+            // Check if RTCPeerConnection is available
+            if (typeof RTCPeerConnection === 'undefined' && typeof webkitRTCPeerConnection === 'undefined') {
+                throw new Error('WebRTC RTCPeerConnection is not supported in your browser.');
+            }
+
             console.log('Starting call, type:', callType, 'isInitiator:', !incomingOffer);
             
             // Request media with better error handling
@@ -83,20 +93,15 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
 
             const isInitiator = !incomingOffer;
 
-            const peer = new SimplePeer({
+            // Create peer with proper configuration
+            const peerOptions = {
                 initiator: isInitiator,
                 trickle: true,
-                stream,
-                config: {
-                    iceServers: [
-                        { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' },
-                        { urls: 'stun:stun2.l.google.com:19302' },
-                        { urls: 'stun:stun3.l.google.com:19302' },
-                        { urls: 'stun:stun4.l.google.com:19302' }
-                    ]
-                }
-            });
+                stream: stream
+            };
+
+            console.log('Creating peer with options:', peerOptions);
+            const peer = new Peer(peerOptions);
 
             peer.on('signal', (data) => {
                 console.log('Signal data:', data.type, 'to user:', user._id);
