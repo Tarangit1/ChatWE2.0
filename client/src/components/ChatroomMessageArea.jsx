@@ -7,6 +7,11 @@ import {
     BsArrowLeft,
     BsPeople,
     BsLock,
+    BsDownload,
+    BsFileEarmark,
+    BsImage,
+    BsPlayCircle,
+    BsChatDots,
 } from 'react-icons/bs';
 import axios from 'axios';
 import EmojiGifPicker from './EmojiGifPicker';
@@ -14,20 +19,23 @@ import FileUpload from './FileUpload';
 
 const ChatroomMessageArea = ({ chatroom, onBack }) => {
     const [messages, setMessages] = useState([]);
-    const [newMessage, setNewMessage] = useState('');
+    const [messageText, setMessageText] = useState('');
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [showFileUpload, setShowFileUpload] = useState(false);
+    const [selectedFile, setSelectedFile] = useState(null);
     const [typingUsers, setTypingUsers] = useState(new Set());
     const messagesEndRef = useRef(null);
     const typingTimeoutRef = useRef(null);
+    const inputRef = useRef(null);
     const { socket, user } = useSocket();
+
+    const API_URL = import.meta.env.VITE_API_URL;
 
     useEffect(() => {
         if (chatroom) {
             fetchMessages();
             joinChatroom();
 
-            // Socket listeners
             socket?.on('chatroom:message', handleNewMessage);
             socket?.on('chatroom:typing', handleTyping);
             socket?.on('chatroom:stop-typing', handleStopTyping);
@@ -42,8 +50,14 @@ const ChatroomMessageArea = ({ chatroom, onBack }) => {
     }, [chatroom?._id]);
 
     useEffect(() => {
-        scrollToBottom();
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
+
+    useEffect(() => {
+        setMessageText('');
+        setShowEmojiPicker(false);
+        setSelectedFile(null);
+    }, [chatroom]);
 
     const joinChatroom = () => {
         if (socket && chatroom) {
@@ -60,7 +74,7 @@ const ChatroomMessageArea = ({ chatroom, onBack }) => {
     const fetchMessages = async () => {
         try {
             const response = await axios.get(
-                `${import.meta.env.VITE_API_URL}/api/chatrooms/${chatroom._id}/messages`,
+                `${API_URL}/api/chatrooms/${chatroom._id}/messages`,
                 { withCredentials: true }
             );
             setMessages(response.data);
@@ -92,56 +106,83 @@ const ChatroomMessageArea = ({ chatroom, onBack }) => {
     };
 
     const handleInputChange = (e) => {
-        setNewMessage(e.target.value);
+        setMessageText(e.target.value);
 
-        // Emit typing event
         if (socket) {
             socket.emit('chatroom:typing', chatroom._id);
 
-            // Clear previous timeout
             if (typingTimeoutRef.current) {
                 clearTimeout(typingTimeoutRef.current);
             }
 
-            // Stop typing after 2 seconds
             typingTimeoutRef.current = setTimeout(() => {
                 socket.emit('chatroom:stop-typing', chatroom._id);
-            }, 2000);
+            }, 1000);
         }
     };
 
-    const sendMessage = async (messageData = {}) => {
-        const content = messageData.content || newMessage.trim();
-        if (!content && !messageData.fileUrl) return;
+    const handleSendMessage = async () => {
+        if (!messageText.trim() && !selectedFile) return;
 
-        const messagePayload = {
-            chatroomId: chatroom._id,
-            content,
-            messageType: messageData.messageType || 'text',
-            fileUrl: messageData.fileUrl,
-            fileName: messageData.fileName,
-            fileSize: messageData.fileSize,
-            mimeType: messageData.mimeType,
-        };
+        if (selectedFile) {
+            const formData = new FormData();
+            formData.append('file', selectedFile);
 
-        socket?.emit('chatroom:message', messagePayload);
-        setNewMessage('');
-        setShowEmojiPicker(false);
+            try {
+                const response = await axios.post(
+                    `${API_URL}/api/upload/file`,
+                    formData,
+                    {
+                        withCredentials: true,
+                        headers: { 'Content-Type': 'multipart/form-data' },
+                    }
+                );
 
-        // Stop typing
+                if (response.data.success) {
+                    const messageType = getFileType(response.data.file.mimeType);
+                    sendMessage({
+                        content: messageText,
+                        messageType,
+                        fileUrl: response.data.file.url,
+                        fileName: response.data.file.name,
+                        fileSize: response.data.file.size,
+                        mimeType: response.data.file.mimeType,
+                    });
+                }
+            } catch (error) {
+                console.error('File upload failed:', error);
+            }
+            setSelectedFile(null);
+        } else {
+            sendMessage({ content: messageText, messageType: 'text' });
+        }
+
+        setMessageText('');
         if (typingTimeoutRef.current) {
             clearTimeout(typingTimeoutRef.current);
         }
         socket?.emit('chatroom:stop-typing', chatroom._id);
     };
 
-    const handleSubmit = (e) => {
-        e.preventDefault();
-        sendMessage();
+    const sendMessage = (messageData) => {
+        const messagePayload = {
+            chatroomId: chatroom._id,
+            ...messageData,
+        };
+        socket?.emit('chatroom:message', messagePayload);
+        setShowEmojiPicker(false);
+    };
+
+    const handleKeyPress = (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleSendMessage();
+        }
     };
 
     const handleEmojiSelect = (emoji) => {
-        setNewMessage((prev) => prev + emoji.native);
+        setMessageText((prev) => prev + emoji);
+        inputRef.current?.focus();
     };
 
     const handleGifSelect = (gifUrl) => {
@@ -150,48 +191,19 @@ const ChatroomMessageArea = ({ chatroom, onBack }) => {
             messageType: 'gif',
             fileUrl: gifUrl,
         });
+        setShowEmojiPicker(false);
     };
 
-    const handleFileUpload = async (file) => {
-        const formData = new FormData();
-        formData.append('file', file);
-
-        try {
-            const response = await axios.post(
-                `${import.meta.env.VITE_API_URL}/api/upload`,
-                formData,
-                {
-                    withCredentials: true,
-                    headers: { 'Content-Type': 'multipart/form-data' },
-                }
-            );
-
-            const fileType = file.type.startsWith('image/')
-                ? 'image'
-                : file.type.startsWith('video/')
-                ? 'video'
-                : file.type.startsWith('audio/')
-                ? 'audio'
-                : 'file';
-
-            sendMessage({
-                content: '',
-                messageType: fileType,
-                fileUrl: response.data.fileUrl,
-                fileName: file.name,
-                fileSize: file.size,
-                mimeType: file.type,
-            });
-
-            setShowFileUpload(false);
-        } catch (error) {
-            console.error('Error uploading file:', error);
-            alert('Failed to upload file');
-        }
+    const handleFileSelect = (file) => {
+        setSelectedFile(file);
+        setShowFileUpload(false);
     };
 
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const getFileType = (mimeType) => {
+        if (mimeType.startsWith('image/')) return 'image';
+        if (mimeType.startsWith('video/')) return 'video';
+        if (mimeType.startsWith('audio/')) return 'audio';
+        return 'file';
     };
 
     const formatTime = (date) => {
@@ -216,6 +228,14 @@ const ChatroomMessageArea = ({ chatroom, onBack }) => {
         }
     };
 
+    const formatFileSize = (bytes) => {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+    };
+
     const renderMessage = (message, index) => {
         const isSentByMe = message.sender._id === user._id;
         const showDate =
@@ -224,46 +244,79 @@ const ChatroomMessageArea = ({ chatroom, onBack }) => {
 
         return (
             <div key={message._id}>
-                {showDate && <div className="date-separator">{formatDate(message.createdAt)}</div>}
+                {showDate && <div className="date-divider">{formatDate(message.createdAt)}</div>}
                 <div className={`message-group ${isSentByMe ? 'sent' : 'received'}`}>
                     {!isSentByMe && (
-                        <div className="message-avatar">
-                            <img src={message.sender.avatar} alt={message.sender.name} />
-                        </div>
+                        <img
+                            src={message.sender.avatar}
+                            alt={message.sender.name}
+                            className="message-avatar"
+                        />
                     )}
                     <div className="message-content">
-                        {!isSentByMe && <div className="message-sender">{message.sender.name}</div>}
+                        {!isSentByMe && (
+                            <div className="message-sender-name">{message.sender.name}</div>
+                        )}
                         <div className="message-bubble">
                             {message.messageType === 'text' && (
                                 <p className="message-text">{message.content}</p>
                             )}
+
                             {message.messageType === 'gif' && (
-                                <img src={message.fileUrl} alt="GIF" className="message-gif" />
+                                <div className="message-gif-container">
+                                    <img
+                                        src={message.fileUrl}
+                                        alt="GIF"
+                                        className="message-gif"
+                                    />
+                                </div>
                             )}
+
                             {message.messageType === 'image' && (
-                                <img
-                                    src={message.fileUrl}
-                                    alt={message.fileName}
-                                    className="message-image"
-                                />
+                                <div className="message-media-container">
+                                    <img
+                                        src={`${API_URL}${message.fileUrl}`}
+                                        alt={message.fileName}
+                                        className="message-image"
+                                    />
+                                    {message.content && (
+                                        <p className="message-text">{message.content}</p>
+                                    )}
+                                </div>
                             )}
+
                             {message.messageType === 'video' && (
-                                <video controls className="message-video">
-                                    <source src={message.fileUrl} type={message.mimeType} />
-                                </video>
+                                <div className="message-media-container">
+                                    <video controls className="message-video">
+                                        <source src={`${API_URL}${message.fileUrl}`} type={message.mimeType} />
+                                    </video>
+                                    {message.content && (
+                                        <p className="message-text">{message.content}</p>
+                                    )}
+                                </div>
                             )}
+
                             {message.messageType === 'file' && (
-                                <a
-                                    href={message.fileUrl}
-                                    download={message.fileName}
-                                    className="message-file"
-                                >
-                                    <BsPaperclip />
-                                    {message.fileName}
-                                </a>
+                                <div className="message-file">
+                                    <div className="file-icon">
+                                        <BsFileEarmark />
+                                    </div>
+                                    <div className="file-info">
+                                        <div className="file-name">{message.fileName}</div>
+                                        <div className="file-size">{formatFileSize(message.fileSize)}</div>
+                                    </div>
+                                    <a
+                                        href={`${API_URL}${message.fileUrl}`}
+                                        download
+                                        className="file-download"
+                                    >
+                                        <BsDownload />
+                                    </a>
+                                </div>
                             )}
+
+                            <span className="message-time">{formatTime(message.createdAt)}</span>
                         </div>
-                        <span className="message-time">{formatTime(message.createdAt)}</span>
                     </div>
                 </div>
             </div>
@@ -273,86 +326,132 @@ const ChatroomMessageArea = ({ chatroom, onBack }) => {
     if (!chatroom) {
         return (
             <div className="empty-state">
-                <BsPeople className="empty-state-icon" />
-                <p className="empty-state-title">Select a chatroom</p>
+                <div className="empty-state-icon">
+                    <BsPeople />
+                </div>
+                <h2 className="empty-state-title">Select a chatroom</h2>
                 <p className="empty-state-subtitle">Choose a chatroom to start messaging</p>
             </div>
         );
     }
 
     return (
-        <div className="message-area">
-            <div className="message-area-header">
-                <button className="back-button" onClick={onBack}>
+        <>
+            {/* Chat Header */}
+            <header className="chat-header">
+                <button className="mobile-back-btn" onClick={onBack} title="Back">
                     <BsArrowLeft />
                 </button>
-                <div className="chatroom-header-info">
-                    <h2>
-                        {chatroom.name}
-                        {chatroom.isPrivate && <BsLock className="private-icon-header" />}
-                    </h2>
-                    <p className="chatroom-members-count">
-                        <BsPeople /> {chatroom.members.length} members
-                    </p>
+                <div className="chat-header-info">
+                    <div className="chat-header-avatar chatroom-header-avatar">
+                        {chatroom.avatar ? (
+                            <img src={chatroom.avatar} alt={chatroom.name} />
+                        ) : (
+                            <BsPeople />
+                        )}
+                    </div>
+                    <div>
+                        <h2 className="chat-header-name">
+                            {chatroom.name}
+                            {chatroom.isPrivate && <BsLock className="private-badge" />}
+                        </h2>
+                        <div className="chat-header-status">
+                            <BsPeople style={{ fontSize: '0.9rem' }} />
+                            {chatroom.members.length} members
+                        </div>
+                    </div>
                 </div>
-            </div>
+            </header>
 
-            <div className="messages-container">
-                {messages.map((message, index) => renderMessage(message, index))}
+            {/* Messages Area */}
+            <div className="messages-area">
+                {messages.map(renderMessage)}
+
                 {typingUsers.size > 0 && (
                     <div className="typing-indicator">
                         <div className="typing-dots">
-                            <span></span>
-                            <span></span>
-                            <span></span>
+                            <span className="typing-dot"></span>
+                            <span className="typing-dot"></span>
+                            <span className="typing-dot"></span>
                         </div>
+                        <span className="typing-text">Someone is typing...</span>
                     </div>
                 )}
+
                 <div ref={messagesEndRef} />
             </div>
 
-            <form className="message-input-container" onSubmit={handleSubmit}>
-                <button
-                    type="button"
-                    className="icon-button"
-                    onClick={() => setShowFileUpload(!showFileUpload)}
-                >
-                    <BsPaperclip />
-                </button>
-                <button
-                    type="button"
-                    className="icon-button"
-                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                >
-                    <BsEmojiSmile />
-                </button>
-                <input
-                    type="text"
-                    value={newMessage}
-                    onChange={handleInputChange}
-                    placeholder="Type a message..."
-                    className="message-input"
-                />
-                <button type="submit" className="send-button" disabled={!newMessage.trim()}>
-                    <BsSend />
-                </button>
-            </form>
+            {/* Message Input */}
+            <div className="message-input-area">
+                {selectedFile && (
+                    <div className="file-preview-bar">
+                        <div className="file-preview-icon">
+                            {selectedFile.type.startsWith('image/') ? <BsImage /> : <BsFileEarmark />}
+                        </div>
+                        <div className="file-preview-info">
+                            <div className="file-preview-name">{selectedFile.name}</div>
+                            <div className="file-preview-size">{formatFileSize(selectedFile.size)}</div>
+                        </div>
+                        <button
+                            className="file-preview-remove"
+                            onClick={() => setSelectedFile(null)}
+                        >
+                            ✕
+                        </button>
+                    </div>
+                )}
 
-            {showEmojiPicker && (
-                <EmojiGifPicker
-                    onEmojiSelect={handleEmojiSelect}
-                    onGifSelect={handleGifSelect}
-                    onClose={() => setShowEmojiPicker(false)}
-                />
-            )}
+                <div className="input-container">
+                    <div className="input-actions" style={{ position: 'relative' }}>
+                        <button
+                            className={`input-btn ${showEmojiPicker ? 'active' : ''}`}
+                            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                        >
+                            <BsEmojiSmile />
+                        </button>
+                        <button
+                            className="input-btn"
+                            onClick={() => setShowFileUpload(!showFileUpload)}
+                        >
+                            <BsPaperclip />
+                        </button>
 
-            {showFileUpload && (
-                <FileUpload
-                    onFileSelect={handleFileUpload}
-                    onClose={() => setShowFileUpload(false)}
-                />
-            )}
-        </div>
+                        {showEmojiPicker && (
+                            <EmojiGifPicker
+                                onEmojiSelect={handleEmojiSelect}
+                                onGifSelect={handleGifSelect}
+                                onClose={() => setShowEmojiPicker(false)}
+                            />
+                        )}
+
+                        {showFileUpload && (
+                            <FileUpload
+                                onFileSelect={handleFileSelect}
+                                onClose={() => setShowFileUpload(false)}
+                            />
+                        )}
+                    </div>
+
+                    <textarea
+                        ref={inputRef}
+                        className="message-input"
+                        placeholder="Type a message..."
+                        value={messageText}
+                        onChange={handleInputChange}
+                        onKeyPress={handleKeyPress}
+                        rows={1}
+                    />
+
+                    <button
+                        className="send-btn"
+                        onClick={handleSendMessage}
+                        disabled={!messageText.trim() && !selectedFile}
+                    >
+                        <BsSend />
+                    </button>
+                </div>
+            </div>
+        </>
     );
 };
 

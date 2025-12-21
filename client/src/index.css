@@ -2066,3 +2066,35 @@ input, textarea {
   }
 }
 
+/* ============================
+   Chatroom Message Styles
+   ============================ */
+
+.message-sender-name {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-bottom: var(--spacing-xs);
+  font-weight: 500;
+}
+
+.chatroom-header-avatar {
+  background: var(--primary-gradient);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+}
+
+.chatroom-header-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.private-badge {
+  font-size: 0.85rem;
+  color: var(--warning-color);
+  margin-left: var(--spacing-xs);
+  vertical-align: middle;
+}
+
