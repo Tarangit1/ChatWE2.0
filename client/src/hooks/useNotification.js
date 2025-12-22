@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 
 // Sound URLs (free sounds from CDN)
 const SOUNDS = {
-    ringtone: 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3', // Phone ring
+    ringtone: 'https://www.soundjay.com/phone/sounds/nokia-3310-ringtone.mp3', // Nokia 3310 ringtone
     message: 'https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3', // Message notification
     callEnd: 'https://assets.mixkit.co/active_storage/sfx/2620/2620-preview.mp3', // Call end beep
 };
