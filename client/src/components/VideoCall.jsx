@@ -27,28 +27,18 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
 
     const iceServers = {
         iceServers: [
+            // Google STUN servers
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' },
             { urls: 'stun:stun2.l.google.com:19302' },
-            // Free TURN servers for NAT traversal
-            {
-                urls: 'turn:openrelay.metered.ca:80',
-                username: 'openrelayproject',
-                credential: 'openrelayproject'
-            },
-            {
-                urls: 'turn:openrelay.metered.ca:443',
-                username: 'openrelayproject',
-                credential: 'openrelayproject'
-            },
-            {
-                urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-                username: 'openrelayproject',
-                credential: 'openrelayproject'
-            }
+            { urls: 'stun:stun3.l.google.com:19302' },
+            { urls: 'stun:stun4.l.google.com:19302' },
         ],
         iceCandidatePoolSize: 10
     };
+    
+    // Track if component is mounted
+    const isMounted = useRef(true);
 
     useEffect(() => {
         // Check if we have all necessary functions
@@ -58,12 +48,14 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
         }
 
         // Reset state for new call
+        isMounted.current = true;
         pendingIceCandidates.current = [];
         remoteDescriptionSet.current = false;
         
         startCall();
 
         return () => {
+            isMounted.current = false;
             cleanup();
         };
     }, []); // Run only once on mount
@@ -140,6 +132,11 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
             pc.ontrack = (event) => {
                 console.log('Received remote track:', event.track.kind, 'streams:', event.streams.length);
                 
+                if (!isMounted.current) {
+                    console.log('Component unmounted, ignoring track');
+                    return;
+                }
+                
                 const stream = event.streams[0] || new MediaStream([event.track]);
                 
                 // Set video element source
@@ -158,7 +155,9 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
                     });
                 }
                 
-                setConnectionStatus('connected');
+                if (isMounted.current) {
+                    setConnectionStatus('connected');
+                }
             };
 
             // Handle ICE candidates
@@ -172,34 +171,59 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
             // Handle connection state changes
             pc.onconnectionstatechange = () => {
                 console.log('Connection state:', pc.connectionState);
+                if (!isMounted.current) return;
+                
                 if (pc.connectionState === 'connected') {
                     setConnectionStatus('connected');
                 } else if (pc.connectionState === 'failed') {
-                    setConnectionStatus('error');
-                    setError('Connection failed. Please try again.');
+                    // Try ICE restart before giving up
+                    console.log('Connection failed, attempting ICE restart...');
+                    pc.restartIce();
                 } else if (pc.connectionState === 'disconnected') {
                     setConnectionStatus('connecting');
-                    // Give it time to reconnect
-                    setTimeout(() => {
-                        if (peerConnectionRef.current?.connectionState === 'disconnected') {
-                            setConnectionStatus('error');
-                        }
-                    }, 5000);
                 }
             };
 
             pc.oniceconnectionstatechange = () => {
                 console.log('ICE connection state:', pc.iceConnectionState);
+                if (!isMounted.current) return;
+                
                 if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
                     setConnectionStatus('connected');
                 } else if (pc.iceConnectionState === 'failed') {
-                    setConnectionStatus('error');
-                    setError('ICE connection failed. Network may be blocking the call.');
+                    // Try ICE restart
+                    console.log('ICE failed, attempting restart...');
+                    pc.restartIce();
+                } else if (pc.iceConnectionState === 'disconnected') {
+                    // Wait a bit before declaring error
+                    setTimeout(() => {
+                        if (peerConnectionRef.current?.iceConnectionState === 'disconnected') {
+                            console.log('Still disconnected, restarting ICE...');
+                            peerConnectionRef.current.restartIce();
+                        }
+                    }, 3000);
                 }
             };
 
             pc.onicegatheringstatechange = () => {
                 console.log('ICE gathering state:', pc.iceGatheringState);
+            };
+            
+            // Handle renegotiation (needed for ICE restart)
+            pc.onnegotiationneeded = async () => {
+                console.log('Negotiation needed');
+                if (!isMounted.current) return;
+                
+                // Only initiator should create new offers
+                if (!incomingOffer && pc.signalingState === 'stable') {
+                    try {
+                        const offer = await pc.createOffer({ iceRestart: true });
+                        await pc.setLocalDescription(offer);
+                        initiateCall(user._id, offer, callType);
+                    } catch (err) {
+                        console.error('Renegotiation failed:', err);
+                    }
+                }
             };
 
             const isInitiator = !incomingOffer;
