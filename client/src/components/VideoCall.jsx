@@ -8,6 +8,10 @@ import {
     BsTelephoneX,
 } from 'react-icons/bs';
 
+// Metered TURN API
+const METERED_API_KEY = '733f9376c746683ebb2bcf8e653d9d9a2751';
+const METERED_API_URL = `https://chatwe2.metered.live/api/v1/turn/credentials?apiKey=${METERED_API_KEY}`;
+
 const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
     const socketContext = useSocket();
     const { socket, initiateCall, answerCall, sendIceCandidate, endCall } = socketContext || {};
@@ -16,6 +20,7 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
     const [isVideoOff, setIsVideoOff] = useState(callType === 'voice');
     const [connectionStatus, setConnectionStatus] = useState('connecting');
     const [error, setError] = useState(null);
+    const [iceServers, setIceServers] = useState(null);
 
     const localVideoRef = useRef(null);
     const remoteVideoRef = useRef(null);
@@ -25,37 +30,36 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
     const pendingIceCandidates = useRef([]);
     const remoteDescriptionSet = useRef(false);
 
-    const iceServers = {
-        iceServers: [
-            // Google STUN servers
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' },
-            // Metered TURN servers (free tier)
-            {
-                urls: "stun:stun.relay.metered.ca:80"
-            },
-            {
-                urls: "turn:global.relay.metered.ca:80",
-                username: "e8dd65c92f6a9833b8691ef1",
-                credential: "P3h+xjZ4+IzQl8La"
-            },
-            {
-                urls: "turn:global.relay.metered.ca:80?transport=tcp",
-                username: "e8dd65c92f6a9833b8691ef1",
-                credential: "P3h+xjZ4+IzQl8La"
-            },
-            {
-                urls: "turn:global.relay.metered.ca:443",
-                username: "e8dd65c92f6a9833b8691ef1",
-                credential: "P3h+xjZ4+IzQl8La"
-            },
-            {
-                urls: "turns:global.relay.metered.ca:443?transport=tcp",
-                username: "e8dd65c92f6a9833b8691ef1",
-                credential: "P3h+xjZ4+IzQl8La"
-            }
-        ],
-        iceCandidatePoolSize: 10
+    // Fetch TURN credentials from Metered API
+    const fetchTurnCredentials = async () => {
+        try {
+            const response = await fetch(METERED_API_URL);
+            const turnServers = await response.json();
+            
+            // Add Google STUN servers as fallback
+            const servers = [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                ...turnServers
+            ];
+            
+            console.log('Fetched TURN credentials:', servers.length, 'servers');
+            return {
+                iceServers: servers,
+                iceCandidatePoolSize: 10
+            };
+        } catch (err) {
+            console.error('Failed to fetch TURN credentials:', err);
+            // Fallback to STUN only
+            return {
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    { urls: 'stun:stun2.l.google.com:19302' },
+                ],
+                iceCandidatePoolSize: 10
+            };
+        }
     };
     
     // Track if component is mounted
@@ -73,13 +77,25 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
         pendingIceCandidates.current = [];
         remoteDescriptionSet.current = false;
         
-        startCall();
+        // Fetch TURN credentials then start call
+        fetchTurnCredentials().then(config => {
+            if (isMounted.current) {
+                setIceServers(config);
+            }
+        });
 
         return () => {
             isMounted.current = false;
             cleanup();
         };
     }, []); // Run only once on mount
+
+    // Start call when iceServers are ready
+    useEffect(() => {
+        if (iceServers && isMounted.current) {
+            startCall();
+        }
+    }, [iceServers]);
 
     useEffect(() => {
         if (socket) {

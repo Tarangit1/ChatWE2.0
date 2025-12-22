@@ -1,8 +1,8 @@
 import { useEffect, useRef, useCallback } from 'react';
 
-// Sound URLs (free sounds from CDN)
+// Sound URLs
 const SOUNDS = {
-    ringtone: 'https://www.soundjay.com/phone/sounds/nokia-3310-ringtone.mp3', // Nokia 3310 ringtone
+    ringtone: '/nokia_3310.mp3', // Nokia 3310 ringtone from public folder
     message: 'https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3', // Message notification
     callEnd: 'https://assets.mixkit.co/active_storage/sfx/2620/2620-preview.mp3', // Call end beep
 };
@@ -14,16 +14,27 @@ export const useNotification = () => {
     const ringtoneIntervalRef = useRef(null);
 
     useEffect(() => {
-        // Preload audio files
+        // Preload audio files with error handling
         ringtoneRef.current = new Audio(SOUNDS.ringtone);
         ringtoneRef.current.loop = false;
         ringtoneRef.current.volume = 0.7;
+        ringtoneRef.current.preload = 'auto';
+        
+        // Add load event listener to ensure audio is ready
+        ringtoneRef.current.addEventListener('canplaythrough', () => {
+            console.log('Ringtone loaded successfully');
+        });
+        ringtoneRef.current.addEventListener('error', (e) => {
+            console.error('Error loading ringtone:', e);
+        });
 
         messageRef.current = new Audio(SOUNDS.message);
         messageRef.current.volume = 0.5;
+        messageRef.current.preload = 'auto';
 
         callEndRef.current = new Audio(SOUNDS.callEnd);
         callEndRef.current.volume = 0.5;
+        callEndRef.current.preload = 'auto';
 
         // Request notification permission
         if ('Notification' in window && Notification.permission === 'default') {
@@ -39,13 +50,15 @@ export const useNotification = () => {
         if (ringtoneRef.current) {
             // Play ringtone repeatedly
             const playSound = () => {
-                ringtoneRef.current.currentTime = 0;
-                ringtoneRef.current.play().catch(e => console.log('Ringtone blocked:', e.message));
+                // Create a fresh audio instance each time for reliability
+                const audio = new Audio(SOUNDS.ringtone);
+                audio.volume = 0.7;
+                audio.play().catch(e => console.log('Ringtone blocked:', e.message));
             };
             
             playSound();
-            // Repeat every 3 seconds
-            ringtoneIntervalRef.current = setInterval(playSound, 3000);
+            // Repeat every 4 seconds (typical Nokia ringtone length)
+            ringtoneIntervalRef.current = setInterval(playSound, 4000);
         }
     }, []);
 
