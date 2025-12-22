@@ -19,6 +19,7 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
 
     const localVideoRef = useRef(null);
     const remoteVideoRef = useRef(null);
+    const remoteAudioRef = useRef(null);
     const peerConnectionRef = useRef(null);
     const localStreamRef = useRef(null);
     const pendingIceCandidates = useRef([]);
@@ -29,8 +30,22 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' },
             { urls: 'stun:stun2.l.google.com:19302' },
-            { urls: 'stun:stun3.l.google.com:19302' },
-            { urls: 'stun:stun4.l.google.com:19302' },
+            // Free TURN servers for NAT traversal
+            {
+                urls: 'turn:openrelay.metered.ca:80',
+                username: 'openrelayproject',
+                credential: 'openrelayproject'
+            },
+            {
+                urls: 'turn:openrelay.metered.ca:443',
+                username: 'openrelayproject',
+                credential: 'openrelayproject'
+            },
+            {
+                urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+                username: 'openrelayproject',
+                credential: 'openrelayproject'
+            }
         ],
         iceCandidatePoolSize: 10
     };
@@ -123,23 +138,26 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
 
             // Handle incoming tracks
             pc.ontrack = (event) => {
-                console.log('Received remote track:', event.track.kind, event.streams);
+                console.log('Received remote track:', event.track.kind, 'streams:', event.streams.length);
+                
+                const stream = event.streams[0] || new MediaStream([event.track]);
+                
+                // Set video element source
                 if (remoteVideoRef.current) {
-                    // Use the first stream from the event
-                    if (event.streams && event.streams[0]) {
-                        remoteVideoRef.current.srcObject = event.streams[0];
-                    } else {
-                        // Fallback: create a new MediaStream with the track
-                        let stream = remoteVideoRef.current.srcObject;
-                        if (!stream) {
-                            stream = new MediaStream();
-                            remoteVideoRef.current.srcObject = stream;
-                        }
-                        stream.addTrack(event.track);
-                    }
-                    // Ensure video plays
-                    remoteVideoRef.current.play().catch(e => console.log('Autoplay prevented:', e));
+                    remoteVideoRef.current.srcObject = stream;
+                    remoteVideoRef.current.play().catch(e => {
+                        console.log('Video autoplay prevented:', e.message);
+                    });
                 }
+                
+                // Also set audio element for reliable audio playback
+                if (remoteAudioRef.current && event.track.kind === 'audio') {
+                    remoteAudioRef.current.srcObject = stream;
+                    remoteAudioRef.current.play().catch(e => {
+                        console.log('Audio autoplay prevented:', e.message);
+                    });
+                }
+                
                 setConnectionStatus('connected');
             };
 
@@ -345,10 +363,13 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
     return (
         <div className="video-call-overlay">
             <div className="video-call-container">
+                {/* Hidden audio element for reliable audio playback */}
+                <audio ref={remoteAudioRef} autoPlay playsInline style={{ display: 'none' }} />
+                
                 <div className="video-streams">
                     {/* Remote Video */}
                     <div className="video-stream">
-                        {/* Hidden audio/video element for remote stream - always present */}
+                        {/* Audio/Video element for remote stream - always present for audio */}
                         <video
                             ref={remoteVideoRef}
                             autoPlay
@@ -357,7 +378,9 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
                                 width: '100%',
                                 height: '100%',
                                 objectFit: 'cover',
-                                display: connectionStatus === 'connected' && callType === 'video' ? 'block' : 'none'
+                                // For voice calls, make invisible but keep in DOM for audio
+                                visibility: connectionStatus === 'connected' && callType === 'video' ? 'visible' : 'hidden',
+                                position: callType === 'voice' ? 'absolute' : 'relative',
                             }}
                         />
                         
