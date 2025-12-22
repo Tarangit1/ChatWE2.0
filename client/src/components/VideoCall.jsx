@@ -197,9 +197,8 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
                 if (pc.connectionState === 'connected') {
                     setConnectionStatus('connected');
                 } else if (pc.connectionState === 'failed') {
-                    // Try ICE restart before giving up
-                    console.log('Connection failed, attempting ICE restart...');
-                    pc.restartIce();
+                    setConnectionStatus('error');
+                    setError('Connection failed. The other user may have network restrictions.');
                 } else if (pc.connectionState === 'disconnected') {
                     setConnectionStatus('connecting');
                 }
@@ -212,39 +211,13 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
                 if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
                     setConnectionStatus('connected');
                 } else if (pc.iceConnectionState === 'failed') {
-                    // Try ICE restart
-                    console.log('ICE failed, attempting restart...');
-                    pc.restartIce();
-                } else if (pc.iceConnectionState === 'disconnected') {
-                    // Wait a bit before declaring error
-                    setTimeout(() => {
-                        if (peerConnectionRef.current?.iceConnectionState === 'disconnected') {
-                            console.log('Still disconnected, restarting ICE...');
-                            peerConnectionRef.current.restartIce();
-                        }
-                    }, 3000);
+                    setConnectionStatus('error');
+                    setError('Connection failed. Both users may be behind restrictive firewalls.');
                 }
             };
 
             pc.onicegatheringstatechange = () => {
                 console.log('ICE gathering state:', pc.iceGatheringState);
-            };
-            
-            // Handle renegotiation (needed for ICE restart)
-            pc.onnegotiationneeded = async () => {
-                console.log('Negotiation needed');
-                if (!isMounted.current) return;
-                
-                // Only initiator should create new offers
-                if (!incomingOffer && pc.signalingState === 'stable') {
-                    try {
-                        const offer = await pc.createOffer({ iceRestart: true });
-                        await pc.setLocalDescription(offer);
-                        initiateCall(user._id, offer, callType);
-                    } catch (err) {
-                        console.error('Renegotiation failed:', err);
-                    }
-                }
             };
 
             const isInitiator = !incomingOffer;
