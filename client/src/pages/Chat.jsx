@@ -8,12 +8,14 @@ import ChatroomList from '../components/ChatroomList';
 import ChatroomMessageArea from '../components/ChatroomMessageArea';
 import VideoCall from '../components/VideoCall';
 import IncomingCall from '../components/IncomingCall';
+import { useNotification } from '../hooks/useNotification';
 import { BsChatDots, BsPeople, BsSun, BsMoon } from 'react-icons/bs';
 
 const Chat = () => {
     const { user, logout } = useAuth();
     const { socket, onlineUsers } = useSocket();
     const { theme, toggleTheme, isDark } = useTheme();
+    const { notifyIncomingCall, notifyNewMessage, stopRingtone, playCallEndSound } = useNotification();
     const [activeTab, setActiveTab] = useState('chats'); // 'chats' or 'chatrooms'
     const [users, setUsers] = useState([]);
     const [selectedUser, setSelectedUser] = useState(null);
@@ -110,6 +112,13 @@ const Chat = () => {
                         ...prev,
                         [message.sender._id]: (prev[message.sender._id] || 0) + 1,
                     }));
+                    
+                    // Play notification sound and show browser notification
+                    notifyNewMessage(
+                        message.sender.name,
+                        message.messageType === 'text' ? message.content : `Sent a ${message.messageType}`,
+                        message.sender.avatar
+                    );
                 }
             };
 
@@ -117,12 +126,15 @@ const Chat = () => {
                 setMessages((prev) => [...prev, message]);
             };
 
-            const handleIncomingCall = ({ from, offer, callType }) => {
+            const handleIncomingCall = ({ from, offer, callType: type }) => {
                 const caller = users.find((u) => u._id === from);
                 if (caller) {
                     setIncomingCall(caller);
                     setCallOffer(offer);
-                    setCallType(callType);
+                    setCallType(type);
+                    
+                    // Play ringtone and show notification
+                    notifyIncomingCall(caller.name, caller.avatar, type);
                 }
             };
 
@@ -136,7 +148,7 @@ const Chat = () => {
                 socket.off('call:incoming', handleIncomingCall);
             };
         }
-    }, [socket, selectedUser, user, users]);
+    }, [socket, selectedUser, user, users, notifyNewMessage, notifyIncomingCall]);
 
     const handleSelectUser = (chatUser) => {
         setSelectedUser(chatUser);
@@ -155,12 +167,15 @@ const Chat = () => {
     };
 
     const handleEndCall = () => {
+        stopRingtone();
+        playCallEndSound();
         setInCall(false);
         setCallType(null);
         setCallOffer(null);
     };
 
     const handleAnswerCall = () => {
+        stopRingtone(); // Stop the ringtone when answering
         setSelectedUser(incomingCall);
         setInCall(true);
         setIncomingCall(null);
@@ -168,6 +183,7 @@ const Chat = () => {
     };
 
     const handleRejectCall = () => {
+        stopRingtone(); // Stop the ringtone when rejecting
         // Notify the caller that the call was rejected
         if (socket && incomingCall) {
             socket.emit('call:reject', { to: incomingCall._id });
