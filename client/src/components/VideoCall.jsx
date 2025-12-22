@@ -44,9 +44,13 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
             ];
             
             console.log('Fetched TURN credentials:', servers.length, 'servers');
+            console.log('TURN servers:', JSON.stringify(turnServers, null, 2));
+            
             return {
                 iceServers: servers,
-                iceCandidatePoolSize: 10
+                iceCandidatePoolSize: 10,
+                // Use 'relay' to force TURN (for testing) or 'all' for normal use
+                iceTransportPolicy: 'all'
             };
         } catch (err) {
             console.error('Failed to fetch TURN credentials:', err);
@@ -227,8 +231,26 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
                 if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
                     setConnectionStatus('connected');
                 } else if (pc.iceConnectionState === 'failed') {
-                    setConnectionStatus('error');
-                    setError('Connection failed. Both users may be behind restrictive firewalls.');
+                    // Try ICE restart before giving up
+                    console.log('ICE failed, attempting restart...');
+                    pc.restartIce();
+                    
+                    // If still failed after a delay, show error
+                    setTimeout(() => {
+                        if (pc.iceConnectionState === 'failed' && isMounted.current) {
+                            setConnectionStatus('error');
+                            setError('Connection failed. Both users may be behind restrictive firewalls.');
+                        }
+                    }, 5000);
+                } else if (pc.iceConnectionState === 'disconnected') {
+                    // Try to recover from disconnected state
+                    console.log('ICE disconnected, waiting for recovery...');
+                    setTimeout(() => {
+                        if (pc.iceConnectionState === 'disconnected' && isMounted.current) {
+                            console.log('Still disconnected, attempting ICE restart...');
+                            pc.restartIce();
+                        }
+                    }, 3000);
                 }
             };
 
