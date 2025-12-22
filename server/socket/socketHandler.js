@@ -3,7 +3,47 @@ import User from '../models/User.js';
 import Chatroom from '../models/Chatroom.js';
 import ChatroomMessage from '../models/ChatroomMessage.js';
 
-const userSocketMap = new Map(); // Map userId to socketId
+// Map userId to Set of socketIds (supports multiple tabs/devices)
+const userSocketMap = new Map();
+
+// Helper to add socket for user
+const addUserSocket = (userId, socketId) => {
+    if (!userSocketMap.has(userId)) {
+        userSocketMap.set(userId, new Set());
+    }
+    userSocketMap.get(userId).add(socketId);
+};
+
+// Helper to remove socket for user
+const removeUserSocket = (userId, socketId) => {
+    if (userSocketMap.has(userId)) {
+        userSocketMap.get(userId).delete(socketId);
+        if (userSocketMap.get(userId).size === 0) {
+            userSocketMap.delete(userId);
+            return true; // User is now fully offline
+        }
+    }
+    return false; // User still has other connections
+};
+
+// Helper to get any socket for a user
+const getUserSocketId = (userId) => {
+    const sockets = userSocketMap.get(userId);
+    if (sockets && sockets.size > 0) {
+        return Array.from(sockets)[0];
+    }
+    return null;
+};
+
+// Helper to get all sockets for a user
+const getAllUserSockets = (userId) => {
+    return userSocketMap.get(userId) || new Set();
+};
+
+// Get all online user IDs
+const getOnlineUserIds = () => {
+    return Array.from(userSocketMap.keys());
+};
 
 const socketHandler = (io) => {
     io.on('connection', (socket) => {
@@ -11,15 +51,22 @@ const socketHandler = (io) => {
 
         // User joins with their userId
         socket.on('user:join', async (userId) => {
-            userSocketMap.set(userId, socket.id);
+            const wasOffline = !userSocketMap.has(userId);
+            
+            addUserSocket(userId, socket.id);
             socket.userId = userId;
 
             // Update user online status
             await User.findByIdAndUpdate(userId, { isOnline: true });
 
-            // Broadcast user online status
-            io.emit('user:online', userId);
-            console.log(`User ${userId} is now online`);
+            // Send current online users to this socket
+            socket.emit('users:online', getOnlineUserIds());
+
+            // Broadcast user online status only if they were offline
+            if (wasOffline) {
+                socket.broadcast.emit('user:online', userId);
+            }
+            console.log(`User ${userId} connected (${userSocketMap.get(userId).size} connections)`);
         });
 
         // Send message
@@ -43,11 +90,11 @@ const socketHandler = (io) => {
                 await message.populate('sender', 'name avatar');
                 await message.populate('receiver', 'name avatar');
 
-                // Send to receiver if online
-                const receiverSocketId = userSocketMap.get(receiverId);
-                if (receiverSocketId) {
-                    io.to(receiverSocketId).emit('message:receive', message);
-                }
+                // Send to all receiver's sockets if online
+                const receiverSockets = getAllUserSockets(receiverId);
+                receiverSockets.forEach(socketId => {
+                    io.to(socketId).emit('message:receive', message);
+                });
 
                 // Send confirmation back to sender
                 socket.emit('message:sent', message);
@@ -68,7 +115,7 @@ const socketHandler = (io) => {
                 );
 
                 // Notify sender about read receipts
-                const senderSocketId = userSocketMap.get(senderId);
+                const senderSocketId = getUserSocketId(senderId);
                 if (senderSocketId) {
                     io.to(senderSocketId).emit('message:read', {
                         messageIds,
@@ -103,7 +150,7 @@ const socketHandler = (io) => {
                 await message.populate('reactions.user', 'name avatar');
 
                 // Notify both users
-                const receiverSocketId = userSocketMap.get(receiverId);
+                const receiverSocketId = getUserSocketId(receiverId);
                 if (receiverSocketId) {
                     io.to(receiverSocketId).emit('message:reacted', {
                         messageId,
@@ -144,10 +191,11 @@ const socketHandler = (io) => {
                     populate: { path: 'sender', select: 'name' }
                 });
 
-                const receiverSocketId = userSocketMap.get(receiverId);
-                if (receiverSocketId) {
-                    io.to(receiverSocketId).emit('message:receive', message);
-                }
+                // Send to all receiver's sockets
+                const receiverSockets = getAllUserSockets(receiverId);
+                receiverSockets.forEach(socketId => {
+                    io.to(socketId).emit('message:receive', message);
+                });
                 socket.emit('message:sent', message);
             } catch (error) {
                 socket.emit('message:error', { message: error.message });
@@ -156,14 +204,14 @@ const socketHandler = (io) => {
 
         // Typing indicator
         socket.on('typing:start', (receiverId) => {
-            const receiverSocketId = userSocketMap.get(receiverId);
+            const receiverSocketId = getUserSocketId(receiverId);
             if (receiverSocketId) {
                 io.to(receiverSocketId).emit('typing:start', socket.userId);
             }
         });
 
         socket.on('typing:stop', (receiverId) => {
-            const receiverSocketId = userSocketMap.get(receiverId);
+            const receiverSocketId = getUserSocketId(receiverId);
             if (receiverSocketId) {
                 io.to(receiverSocketId).emit('typing:stop', socket.userId);
             }
@@ -172,7 +220,7 @@ const socketHandler = (io) => {
         // WebRTC Signaling for Voice/Video Calls
         socket.on('call:initiate', (data) => {
             const { to, offer, callType } = data;
-            const receiverSocketId = userSocketMap.get(to);
+            const receiverSocketId = getUserSocketId(to);
             if (receiverSocketId) {
                 io.to(receiverSocketId).emit('call:incoming', {
                     from: socket.userId,
@@ -184,7 +232,7 @@ const socketHandler = (io) => {
 
         socket.on('call:answer', (data) => {
             const { to, answer } = data;
-            const receiverSocketId = userSocketMap.get(to);
+            const receiverSocketId = getUserSocketId(to);
             if (receiverSocketId) {
                 io.to(receiverSocketId).emit('call:answered', {
                     from: socket.userId,
@@ -195,7 +243,7 @@ const socketHandler = (io) => {
 
         socket.on('call:ice-candidate', (data) => {
             const { to, candidate } = data;
-            const receiverSocketId = userSocketMap.get(to);
+            const receiverSocketId = getUserSocketId(to);
             if (receiverSocketId) {
                 io.to(receiverSocketId).emit('call:ice-candidate', {
                     from: socket.userId,
@@ -206,7 +254,7 @@ const socketHandler = (io) => {
 
         socket.on('call:end', (data) => {
             const { to } = data;
-            const receiverSocketId = userSocketMap.get(to);
+            const receiverSocketId = getUserSocketId(to);
             if (receiverSocketId) {
                 io.to(receiverSocketId).emit('call:ended', {
                     from: socket.userId,
@@ -216,7 +264,7 @@ const socketHandler = (io) => {
 
         socket.on('call:reject', (data) => {
             const { to } = data;
-            const receiverSocketId = userSocketMap.get(to);
+            const receiverSocketId = getUserSocketId(to);
             if (receiverSocketId) {
                 io.to(receiverSocketId).emit('call:rejected', {
                     from: socket.userId,
@@ -438,19 +486,24 @@ const socketHandler = (io) => {
         // Disconnect
         socket.on('disconnect', async () => {
             if (socket.userId) {
-                userSocketMap.delete(socket.userId);
+                // Remove this specific socket, check if user is fully offline
+                const isFullyOffline = removeUserSocket(socket.userId, socket.id);
 
-                // Update user offline status
-                await User.findByIdAndUpdate(socket.userId, {
-                    isOnline: false,
-                    lastSeen: new Date(),
-                });
+                if (isFullyOffline) {
+                    // Update user offline status only if no more connections
+                    await User.findByIdAndUpdate(socket.userId, {
+                        isOnline: false,
+                        lastSeen: new Date(),
+                    });
 
-                // Broadcast user offline status
-                io.emit('user:offline', socket.userId);
-                console.log(`User ${socket.userId} is now offline`);
+                    // Broadcast user offline status
+                    io.emit('user:offline', socket.userId);
+                    console.log(`User ${socket.userId} is now offline`);
+                } else {
+                    console.log(`User ${socket.userId} disconnected one tab (${userSocketMap.get(socket.userId)?.size || 0} remaining)`);
+                }
             }
-            console.log('User disconnected:', socket.id);
+            console.log('Socket disconnected:', socket.id);
         });
     });
 };

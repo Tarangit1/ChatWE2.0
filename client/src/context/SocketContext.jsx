@@ -33,6 +33,17 @@ export const SocketProvider = ({ children }) => {
                 newSocket.emit('user:join', user.id);
             });
 
+            // Handle reconnection
+            newSocket.on('reconnect', () => {
+                console.log('Socket reconnected');
+                newSocket.emit('user:join', user.id);
+            });
+
+            // Receive initial list of online users
+            newSocket.on('users:online', (userIds) => {
+                setOnlineUsers(new Set(userIds));
+            });
+
             newSocket.on('user:online', (userId) => {
                 setOnlineUsers((prev) => new Set([...prev, userId]));
             });
