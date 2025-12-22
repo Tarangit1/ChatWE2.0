@@ -30,9 +30,30 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
             // Google STUN servers
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' },
-            { urls: 'stun:stun2.l.google.com:19302' },
-            { urls: 'stun:stun3.l.google.com:19302' },
-            { urls: 'stun:stun4.l.google.com:19302' },
+            // Metered TURN servers (free tier)
+            {
+                urls: "stun:stun.relay.metered.ca:80"
+            },
+            {
+                urls: "turn:global.relay.metered.ca:80",
+                username: "e8dd65c92f6a9833b8691ef1",
+                credential: "P3h+xjZ4+IzQl8La"
+            },
+            {
+                urls: "turn:global.relay.metered.ca:80?transport=tcp",
+                username: "e8dd65c92f6a9833b8691ef1",
+                credential: "P3h+xjZ4+IzQl8La"
+            },
+            {
+                urls: "turn:global.relay.metered.ca:443",
+                username: "e8dd65c92f6a9833b8691ef1",
+                credential: "P3h+xjZ4+IzQl8La"
+            },
+            {
+                urls: "turns:global.relay.metered.ca:443?transport=tcp",
+                username: "e8dd65c92f6a9833b8691ef1",
+                credential: "P3h+xjZ4+IzQl8La"
+            }
         ],
         iceCandidatePoolSize: 10
     };
