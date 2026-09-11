@@ -12,7 +12,7 @@ import {
 const METERED_API_KEY = '733f9376c746683ebb2bcf8e653d9d9a2751';
 const METERED_API_URL = `https://chatwe2.metered.live/api/v1/turn/credentials?apiKey=${METERED_API_KEY}`;
 
-const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
+const VideoCall = ({ user, callType, onEndCall, incomingOffer, earlyIceCandidates = [] }) => {
     const socketContext = useSocket();
     const { socket, initiateCall, answerCall, sendIceCandidate, endCall } = socketContext || {};
     
@@ -272,11 +272,16 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
                 await pc.setRemoteDescription(new RTCSessionDescription(incomingOffer));
                 remoteDescriptionSet.current = true;
                 
-                // Process any pending ICE candidates
-                while (pendingIceCandidates.current.length > 0) {
-                    const candidate = pendingIceCandidates.current.shift();
-                    await pc.addIceCandidate(new RTCIceCandidate(candidate));
-                    console.log('Added pending ICE candidate');
+                // Process early and pending ICE candidates
+                const allCandidates = [...earlyIceCandidates, ...pendingIceCandidates.current];
+                pendingIceCandidates.current = [];
+                for (const candidate of allCandidates) {
+                    try {
+                        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+                        console.log('Added early/pending ICE candidate');
+                    } catch (err) {
+                        console.error('Error adding early/pending ICE candidate:', err);
+                    }
                 }
                 
                 const answer = await pc.createAnswer();
@@ -308,7 +313,11 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
         }
     };
 
-    const handleCallAnswered = async ({ answer }) => {
+    const handleCallAnswered = async ({ from, answer }) => {
+        if (from && from !== user._id) {
+            console.log('Ignoring call answer from someone else:', from);
+            return;
+        }
         console.log('Received call answer');
         try {
             if (peerConnectionRef.current) {
@@ -329,7 +338,11 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer }) => {
         }
     };
 
-    const handleIceCandidate = async ({ candidate }) => {
+    const handleIceCandidate = async ({ from, candidate }) => {
+        if (from && from !== user._id) {
+            console.log('Ignoring ICE candidate from someone else:', from);
+            return;
+        }
         console.log('Received ICE candidate');
         try {
             if (peerConnectionRef.current && candidate) {

@@ -27,6 +27,7 @@ const Chat = () => {
     const [callType, setCallType] = useState(null);
     const [incomingCall, setIncomingCall] = useState(null);
     const [callOffer, setCallOffer] = useState(null);
+    const earlyIceCandidates = useRef([]);
 
     const API_URL = import.meta.env.VITE_API_URL;
 
@@ -126,6 +127,13 @@ const Chat = () => {
                 setMessages((prev) => [...prev, message]);
             };
 
+            const handleEarlyIceCandidate = ({ from, candidate }) => {
+                if (!inCall) {
+                    console.log('Buffering early ICE candidate from:', from);
+                    earlyIceCandidates.current.push(candidate);
+                }
+            };
+
             const handleIncomingCall = ({ from, offer, callType: type }) => {
                 const caller = users.find((u) => u._id === from);
                 if (caller) {
@@ -141,11 +149,13 @@ const Chat = () => {
             socket.on('message:receive', handleNewMessage);
             socket.on('message:sent', handleMessageSent);
             socket.on('call:incoming', handleIncomingCall);
+            socket.on('call:ice-candidate', handleEarlyIceCandidate);
 
             return () => {
                 socket.off('message:receive', handleNewMessage);
                 socket.off('message:sent', handleMessageSent);
                 socket.off('call:incoming', handleIncomingCall);
+                socket.off('call:ice-candidate', handleEarlyIceCandidate);
             };
         }
     }, [socket, selectedUser, user, users, notifyNewMessage, notifyIncomingCall]);
@@ -161,12 +171,14 @@ const Chat = () => {
     };
 
     const handleStartCall = (type) => {
+        earlyIceCandidates.current = [];
         setCallOffer(null); // Clear any previous offer - we're initiating, not answering
         setCallType(type);
         setInCall(true);
     };
 
     const handleEndCall = () => {
+        earlyIceCandidates.current = [];
         stopRingtone();
         playCallEndSound();
         setInCall(false);
@@ -183,6 +195,7 @@ const Chat = () => {
     };
 
     const handleRejectCall = () => {
+        earlyIceCandidates.current = [];
         stopRingtone(); // Stop the ringtone when rejecting
         // Notify the caller that the call was rejected
         if (socket && incomingCall) {
@@ -313,6 +326,7 @@ const Chat = () => {
                     callType={callType}
                     onEndCall={handleEndCall}
                     incomingOffer={callOffer}
+                    earlyIceCandidates={earlyIceCandidates.current}
                 />
             )}
 
