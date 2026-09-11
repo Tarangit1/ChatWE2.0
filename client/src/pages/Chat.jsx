@@ -24,8 +24,10 @@ const Chat = () => {
     const [unreadCounts, setUnreadCounts] = useState({});
     const [showDropdown, setShowDropdown] = useState(false);
     const [inCall, setInCall] = useState(false);
+    const inCallRef = useRef(false);
     const [callType, setCallType] = useState(null);
     const [incomingCall, setIncomingCall] = useState(null);
+    const incomingCallRef = useRef(null);
     const [callOffer, setCallOffer] = useState(null);
     const earlyIceCandidates = useRef([]);
 
@@ -128,15 +130,27 @@ const Chat = () => {
             };
 
             const handleEarlyIceCandidate = ({ from, candidate }) => {
-                if (!inCall) {
+                if (!inCallRef.current) {
                     console.log('Buffering early ICE candidate from:', from);
                     earlyIceCandidates.current.push(candidate);
+                }
+            };
+
+            const handleCallEnded = () => {
+                if (incomingCallRef.current) {
+                    stopRingtone();
+                    incomingCallRef.current = null;
+        incomingCallRef.current = null;
+        setIncomingCall(null);
+                    setCallOffer(null);
+                    setCallType(null);
                 }
             };
 
             const handleIncomingCall = ({ from, offer, callType: type }) => {
                 const caller = users.find((u) => u._id === from);
                 if (caller) {
+                    incomingCallRef.current = caller;
                     setIncomingCall(caller);
                     setCallOffer(offer);
                     setCallType(type);
@@ -149,12 +163,14 @@ const Chat = () => {
             socket.on('message:receive', handleNewMessage);
             socket.on('message:sent', handleMessageSent);
             socket.on('call:incoming', handleIncomingCall);
+            socket.on('call:ended', handleCallEnded);
             socket.on('call:ice-candidate', handleEarlyIceCandidate);
 
             return () => {
                 socket.off('message:receive', handleNewMessage);
                 socket.off('message:sent', handleMessageSent);
                 socket.off('call:incoming', handleIncomingCall);
+                socket.off('call:ended', handleCallEnded);
                 socket.off('call:ice-candidate', handleEarlyIceCandidate);
             };
         }
@@ -174,6 +190,8 @@ const Chat = () => {
         earlyIceCandidates.current = [];
         setCallOffer(null); // Clear any previous offer - we're initiating, not answering
         setCallType(type);
+        inCallRef.current = true;
+        inCallRef.current = true;
         setInCall(true);
     };
 
@@ -181,6 +199,7 @@ const Chat = () => {
         earlyIceCandidates.current = [];
         stopRingtone();
         playCallEndSound();
+        inCallRef.current = false;
         setInCall(false);
         setCallType(null);
         setCallOffer(null);
