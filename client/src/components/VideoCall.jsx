@@ -151,7 +151,23 @@ const VideoCall = ({ user, callType, onEndCall, incomingOffer, earlyIceCandidate
                 } : false
             };
 
-            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            let stream;
+            try {
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+            } catch (mediaError) {
+                console.warn('Failed to get requested media constraints, trying audio only...', mediaError);
+                // Fallback to audio only if camera is unavailable (e.g. no camera, permission denied, in use)
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                    // Turn off video state since we couldn't get it
+                    if (callType === 'video') {
+                        setIsVideoOff(true);
+                    }
+                } catch (audioError) {
+                    // If audio also fails, re-throw the original error to let it be handled by the outer try-catch
+                    throw mediaError;
+                }
+            }
 
             console.log('Got media stream:', stream.getTracks().map(t => t.kind));
 
