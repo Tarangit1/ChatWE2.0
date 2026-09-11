@@ -48,12 +48,15 @@ export const useNotification = () => {
 
     const playRingtone = useCallback(() => {
         if (ringtoneRef.current) {
-            // Play ringtone repeatedly
+            // Clear any existing interval first to prevent overlaps
+            if (ringtoneIntervalRef.current) {
+                clearInterval(ringtoneIntervalRef.current);
+            }
+
+            // Play ringtone repeatedly using the ref to allow immediate stopping
             const playSound = () => {
-                // Create a fresh audio instance each time for reliability
-                const audio = new Audio(SOUNDS.ringtone);
-                audio.volume = 0.7;
-                audio.play().catch(e => console.log('Ringtone blocked:', e.message));
+                ringtoneRef.current.currentTime = 0;
+                ringtoneRef.current.play().catch(e => console.log('Ringtone blocked:', e.message));
             };
             
             playSound();
