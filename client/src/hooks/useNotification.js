@@ -48,6 +48,11 @@ export const useNotification = () => {
 
     const playRingtone = useCallback(() => {
         if (ringtoneRef.current) {
+            // Clear any existing interval first to prevent overlaps
+            if (ringtoneIntervalRef.current) {
+                clearInterval(ringtoneIntervalRef.current);
+            }
+
             // Play ringtone repeatedly using the ref to allow immediate stopping
             const playSound = () => {
                 ringtoneRef.current.currentTime = 0;

@@ -140,7 +140,6 @@ const Chat = () => {
                 if (incomingCallRef.current) {
                     stopRingtone();
                     incomingCallRef.current = null;
-        incomingCallRef.current = null;
         setIncomingCall(null);
                     setCallOffer(null);
                     setCallType(null);
@@ -191,7 +190,6 @@ const Chat = () => {
         setCallOffer(null); // Clear any previous offer - we're initiating, not answering
         setCallType(type);
         inCallRef.current = true;
-        inCallRef.current = true;
         setInCall(true);
     };
 
@@ -208,7 +206,9 @@ const Chat = () => {
     const handleAnswerCall = () => {
         stopRingtone(); // Stop the ringtone when answering
         setSelectedUser(incomingCall);
+        inCallRef.current = true;
         setInCall(true);
+        incomingCallRef.current = null;
         setIncomingCall(null);
         // Keep callOffer - it's needed for the VideoCall component
     };
