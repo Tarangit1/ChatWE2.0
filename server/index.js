@@ -15,6 +15,7 @@ import messageRoutes from './routes/messages.js';
 import uploadRoutes from './routes/upload.js';
 import chatroomRoutes from './routes/chatrooms.js';
 import socketHandler from './socket/socketHandler.js';
+import MongoStore from 'connect-mongo';
 
 dotenv.config();
 
@@ -49,12 +50,18 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Session middleware
+app.set('trust proxy', 1);
 app.use(
     session({
         secret: process.env.SESSION_SECRET,
         resave: false,
         saveUninitialized: false,
         proxy: true, // Trust proxy for production
+        store: MongoStore.create({
+            mongoUrl: process.env.MONGODB_URI,
+            collectionName: 'sessions',
+            ttl: 24 * 60 * 60 // 24 hrs smae as cookie maxage
+        }),
         cookie: {
             maxAge: 24 * 60 * 60 * 1000, // 24 hours
             secure: process.env.NODE_ENV === 'production',

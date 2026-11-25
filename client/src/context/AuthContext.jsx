@@ -20,27 +20,43 @@ export const AuthProvider = ({ children }) => {
         checkAuth();
     }, []);
 
+
+
     const checkAuth = async () => {
+        const maxAttempts = 2;
         try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s timeout
 
-            const response = await fetch(`${API_URL}/auth/user`, {
-                credentials: 'include',
-                signal: controller.signal,
-            });
-            clearTimeout(timeoutId);
+                try {
+                    const response = await fetch(`${API_URL}/auth/user`, {
+                        credentials: 'include',
+                        signal: controller.signal,
+                    });
+                    clearTimeout(timeoutId);
 
-            const data = await response.json();
-            if (data.success && data.user) {
-                setUser(data.user);
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    if (data.success && data.user) {
+                        setUser(data.user);
+                    }
+                    return;
+                } catch (error) {
+                    clearTimeout(timeoutId);
+                    if (attempt === maxAttempts) {
+                        console.error('Auth check failed:', error);
+                    }
+                }
             }
-        } catch (error) {
-            console.error('Auth check failed:', error);
         } finally {
             setLoading(false);
         }
     };
+
 
     const login = () => {
         window.location.href = `${API_URL}/auth/google`;
